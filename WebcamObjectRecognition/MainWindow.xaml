@@ -1,0 +1,31 @@
+﻿<Window x:Class="WebcamObjectRecognition.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Webcam Object Recognition" Height="600" Width="800">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Status and Input -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10">
+            <TextBlock Text="Status: " FontSize="16"/>
+            <TextBlock x:Name="StatusText" Text="Idle" FontSize="16" Foreground="Green"/>
+            <TextBlock Text=" Label: " FontSize="16" Margin="20,0,0,0"/>
+            <TextBox x:Name="LabelInput" Width="150" FontSize="16"/>
+        </StackPanel>
+
+        <!-- Webcam Feed -->
+        <Image x:Name="WebcamImage" Grid.Row="1" Stretch="Uniform" Margin="10"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="10">
+            <Button x:Name="TrainButton" Content="Start Train Mode" Width="120" Margin="5" Click="TrainButton_Click"/>
+            <Button x:Name="CaptureButton" Content="Capture" Width="100" Margin="5" Click="CaptureButton_Click" IsEnabled="False"/>
+            <Button x:Name="DetectButton" Content="Start Detect Mode" Width="120" Margin="5" Click="DetectButton_Click"/>
+            <Button x:Name="StopButton" Content="Stop" Width="100" Margin="5" Click="StopButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
