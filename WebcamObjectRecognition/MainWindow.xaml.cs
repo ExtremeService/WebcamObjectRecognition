@@ -1,14 +1,26 @@
-﻿using Microsoft.ML;
+﻿using ICSharpCode.SharpZipLib.GZip;
+using Ionic.BZip2;
+using IronPython.Zlib;
+using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Vision;
 using OpenCvSharp;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Net;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using static Microsoft.ML.Transforms.ValueToKeyMappingEstimator;
+using ICSharpCode.SharpZipLib.Core;
+using ICSharpCode.SharpZipLib.Tar;
+
 
 namespace WebcamObjectRecognition
 {
@@ -45,6 +57,207 @@ namespace WebcamObjectRecognition
                 Close();
             }
         }
+
+
+
+
+        static void CreateModel()
+        {
+            string assetsPath = @"C:\Temp\MLTraining\assets";
+
+            string outputMlNetModelFilePath = Path.Combine(assetsPath, "outputs", "imageClassifier.zip");
+            string imagesFolderPathForPredictions = Path.Combine(assetsPath, "inputs", "test-images");
+
+            string imagesDownloadFolderPath = Path.Combine(assetsPath, "inputs", "images");
+
+            // 1. Download the image set and unzip
+            string finalImagesFolderName = DownloadImageSet(imagesDownloadFolderPath);
+            string fullImagesetFolderPath = Path.Combine(imagesDownloadFolderPath, finalImagesFolderName);
+
+            var mlContext = new MLContext(seed: 1);
+
+            // Specify MLContext Filter to only show feedback log/traces about ImageClassification
+            // This is not needed for feedback output if using the explicit MetricsCallback parameter
+            mlContext.Log += FilterMLContextLog;
+
+            // 2. Load the initial full image-set into an IDataView and shuffle so it'll be better balanced
+            IEnumerable<ImageData> images = LoadImagesFromDirectory(folder: fullImagesetFolderPath, useFolderNameAsLabel: true);
+            IDataView fullImagesDataset = mlContext.Data.LoadFromEnumerable(images);
+            IDataView shuffledFullImageFilePathsDataset = mlContext.Data.ShuffleRows(fullImagesDataset);
+
+            // 3. Load Images with in-memory type within the IDataView and Transform Labels to Keys (Categorical)
+            IDataView shuffledFullImagesDataset = mlContext.Transforms.Conversion.
+                    MapValueToKey(outputColumnName: "LabelAsKey", inputColumnName: "Label", keyOrdinality: KeyOrdinality.ByValue)
+                .Append(mlContext.Transforms.LoadRawImageBytes(
+                                                outputColumnName: "Image",
+                                                imageFolder: fullImagesetFolderPath,
+                                                inputColumnName: "ImagePath"))
+                .Fit(shuffledFullImageFilePathsDataset)
+                .Transform(shuffledFullImageFilePathsDataset);
+
+            // 4. Split the data 80:20 into train and test sets, train and evaluate.
+            var trainTestData = mlContext.Data.TrainTestSplit(shuffledFullImagesDataset, testFraction: 0.2);
+            IDataView trainDataView = trainTestData.TrainSet;
+            IDataView testDataView = trainTestData.TestSet;
+
+            // 5. Define the model's training pipeline using DNN default values
+            //
+            var pipeline = mlContext.MulticlassClassification.Trainers
+                    .ImageClassification(featureColumnName: "Image",
+                                         labelColumnName: "LabelAsKey",
+                                         validationSet: testDataView)
+                .Append(mlContext.Transforms.Conversion.MapKeyToValue(outputColumnName: "PredictedLabel",
+                                                                      inputColumnName: "PredictedLabel"));
+
+            // 5.1 (OPTIONAL) Define the model's training pipeline by using explicit hyper-parameters
+            //
+            //var options = new ImageClassificationTrainer.Options()
+            //{
+            //    FeatureColumnName = "Image",
+            //    LabelColumnName = "LabelAsKey",
+            //    // Just by changing/selecting InceptionV3/MobilenetV2/ResnetV250  
+            //    // you can try a different DNN architecture (TensorFlow pre-trained model). 
+            //    Arch = ImageClassificationTrainer.Architecture.MobilenetV2,
+            //    Epoch = 50,       //100
+            //    BatchSize = 10,
+            //    LearningRate = 0.01f,
+            //    MetricsCallback = (metrics) => Console.WriteLine(metrics),
+            //    ValidationSet = testDataView
+            //};
+
+            //var pipeline = mlContext.MulticlassClassification.Trainers.ImageClassification(options)
+            //        .Append(mlContext.Transforms.Conversion.MapKeyToValue(
+            //            outputColumnName: "PredictedLabel",
+            //            inputColumnName: "PredictedLabel"));
+
+            // 6. Train/create the ML model
+            Console.WriteLine("*** Training the image classification model with DNN Transfer Learning on top of the selected pre-trained model/architecture ***");
+
+            // Measuring training time
+            var watch = Stopwatch.StartNew();
+
+            //Train
+            ITransformer trainedModel = pipeline.Fit(trainDataView);
+
+            watch.Stop();
+            var elapsedMs = watch.ElapsedMilliseconds;
+
+            Console.WriteLine($"Training with transfer learning took: {elapsedMs / 1000} seconds");
+
+            // 7. Get the quality metrics (accuracy, etc.)
+            EvaluateModel(mlContext, testDataView, trainedModel);
+
+            // 8. Save the model to assets/outputs (You get ML.NET .zip model file and TensorFlow .pb model file)
+            mlContext.Model.Save(trainedModel, trainDataView.Schema, outputMlNetModelFilePath);
+            Console.WriteLine($"Model saved to: {outputMlNetModelFilePath}");
+
+            // 9. Try a single prediction simulating an end-user app
+            TrySinglePrediction(imagesFolderPathForPredictions, mlContext, trainedModel);
+
+            Console.WriteLine("Press any key to finish");
+            Console.ReadKey();
+        }
+
+        private static void EvaluateModel(MLContext mlContext, IDataView testDataset, ITransformer trainedModel)
+        {
+            Console.WriteLine("Making predictions in bulk for evaluating model's quality...");
+
+            // Measuring time
+            var watch = Stopwatch.StartNew();
+
+            var predictionsDataView = trainedModel.Transform(testDataset);
+
+            var metrics = mlContext.MulticlassClassification.Evaluate(predictionsDataView, labelColumnName: "LabelAsKey", predictedLabelColumnName: "PredictedLabel");
+            //ConsoleHelper.PrintMultiClassClassificationMetrics("TensorFlow DNN Transfer Learning", metrics);
+
+            watch.Stop();
+            var elapsed2Ms = watch.ElapsedMilliseconds;
+
+            Console.WriteLine($"Predicting and Evaluation took: {elapsed2Ms / 1000} seconds");
+        }
+
+        private static void TrySinglePrediction(string imagesFolderPathForPredictions, MLContext mlContext, ITransformer trainedModel)
+        {
+            // Create prediction function to try one prediction
+            var predictionEngine = mlContext.Model.CreatePredictionEngine<InMemoryImageData, ImagePrediction>(trainedModel);
+
+            var testImages = FileUtils.LoadInMemoryImagesFromDirectory(imagesFolderPathForPredictions, false);
+
+            var imageToPredict = testImages.First();
+
+            var prediction = predictionEngine.Predict(imageToPredict);
+        }
+
+
+        public static IEnumerable<ImageData> LoadImagesFromDirectory( string folder, bool useFolderNameAsLabel = true) => FileUtils.LoadImagesFromDirectory(folder, useFolderNameAsLabel).Select(x => new ImageData(x.imagePath, x.label));
+
+
+        public static string DownloadImageSet(string imagesDownloadFolder)
+        {
+            // get a set of images to teach the network about the new classes
+
+            //SINGLE SMALL FLOWERS IMAGESET (200 files)
+            const string fileName = "flower_photos_small_set.zip";
+            var url = $"https://aka.ms/mlnet-resources/datasets/flower_photos_small_set.zip";
+            Web.Download(url, imagesDownloadFolder, fileName);
+            Compress.UnZip(Path.Join(imagesDownloadFolder, fileName), imagesDownloadFolder);
+
+            //SINGLE FULL FLOWERS IMAGESET (3,600 files)
+            //string fileName = "flower_photos.tgz";
+            //string url = $"http://download.tensorflow.org/example_images/{fileName}";
+            //Web.Download(url, imagesDownloadFolder, fileName);
+            //Compress.ExtractTGZ(Path.Join(imagesDownloadFolder, fileName), imagesDownloadFolder);
+
+            return Path.GetFileNameWithoutExtension(fileName);
+        }
+
+        public static void ConsoleWriteImagePrediction(string ImagePath, string Label, string PredictedLabel, float Probability)
+        {
+            var defaultForeground = Console.ForegroundColor;
+            var labelColor = ConsoleColor.Magenta;
+            var probColor = ConsoleColor.Blue;
+
+            Console.Write("Image File: ");
+            Console.ForegroundColor = labelColor;
+            Console.Write($"{Path.GetFileName(ImagePath)}");
+            Console.ForegroundColor = defaultForeground;
+            Console.Write(" original labeled as ");
+            Console.ForegroundColor = labelColor;
+            Console.Write(Label);
+            Console.ForegroundColor = defaultForeground;
+            Console.Write(" predicted as ");
+            Console.ForegroundColor = labelColor;
+            Console.Write(PredictedLabel);
+            Console.ForegroundColor = defaultForeground;
+            Console.Write(" with score ");
+            Console.ForegroundColor = probColor;
+            Console.Write(Probability);
+            Console.ForegroundColor = defaultForeground;
+            Console.WriteLine("");
+        }
+
+        private static void FilterMLContextLog(object sender, LoggingEventArgs e)
+        {
+            if (e.Message.StartsWith("[Source=ImageClassificationTrainer;"))
+            {
+                Console.WriteLine(e.Message);
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         private async void ProcessCameraFeed()
         {
@@ -169,40 +382,7 @@ namespace WebcamObjectRecognition
         {
             try
             {
-                var imageData = LoadTrainingData();
-                if (!imageData.Any())
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        MessageBox.Show("No training images found. Please capture images first.");
-                        ResetToIdle();
-                    });
-                    return;
-                }
 
-                var dataView = _mlContext.Data.LoadFromEnumerable(imageData);
-
-                // ML.NET 3.0.0 pipeline
-                var pipeline = _mlContext.Transforms.LoadImages("Image", null, "ImagePath")
-                    .Append(_mlContext.Transforms.ResizeImages("Image", IMG_SIZE, IMG_SIZE))
-                    .Append(_mlContext.Transforms.ExtractPixels("Image"))
-                    .Append(_mlContext.Transforms.Conversion.MapValueToKey("Label", "Label"))
-                    .Append(_mlContext.MulticlassClassification.Trainers.ImageClassification(
-                        new ImageClassificationTrainer.Options
-                        {
-                            FeatureColumnName = "Image",
-                            LabelColumnName = "Label",
-                            Arch = ImageClassificationTrainer.Architecture.ResnetV250,
-                            Epoch = 20,
-                            BatchSize = 10,
-                            ValidationSet = _mlContext.Data.TrainTestSplit(dataView, 0.2).TestSet
-                        }))
-                    .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
-
-                var model = pipeline.Fit(dataView);
-                _predictionEngine = _mlContext.Model.CreatePredictionEngine<ImageData, ImagePrediction>(model);
-
-                Dispatcher.Invoke(() => StatusText.Text = "Detect Mode");
             }
             catch (Exception ex)
             {
@@ -214,32 +394,12 @@ namespace WebcamObjectRecognition
             }
         }
 
-        private IEnumerable<ImageData> LoadTrainingData()
-        {
-            var images = new List<ImageData>();
-            if (!Directory.Exists(DATA_DIR))
-                return images;
-
-            foreach (var labelDir in Directory.GetDirectories(DATA_DIR))
-            {
-                var label = Path.GetFileName(labelDir);
-                foreach (var imgPath in Directory.GetFiles(labelDir, "*.jpg"))
-                {
-                    if (File.Exists(imgPath))
-                        images.Add(new ImageData { ImagePath = imgPath, Label = label });
-                }
-            }
-            return images;
-        }
 
         private ImagePrediction PredictImage(Mat img)
         {
             try
             {
-                using var resized = img.Resize(new OpenCvSharp.Size(IMG_SIZE, IMG_SIZE));
-                using var ms = resized.ToMemoryStream();
-                var imageData = new ImageData { ImagePath = "temp", ImageBytes = ms.ToArray() };
-                return _predictionEngine.Predict(imageData);
+                return new ImagePrediction { Label = "Unknown", Score = new float[] { 0f } };
             }
             catch
             {
@@ -263,8 +423,61 @@ namespace WebcamObjectRecognition
         }
     }
 
+    public class FileUtils
+    {
+        public static IEnumerable<(string imagePath, string label)> LoadImagesFromDirectory(
+            string folder,
+            bool useFolderNameasLabel)
+        {
+            var imagesPath = Directory
+                .GetFiles(folder, "*", searchOption: SearchOption.AllDirectories)
+                .Where(x => Path.GetExtension(x) == ".jpg" || Path.GetExtension(x) == ".png");
+
+            return useFolderNameasLabel
+                ? imagesPath.Select(imagePath => (imagePath, Directory.GetParent(imagePath).Name))
+                : imagesPath.Select(imagePath =>
+                {
+                    var label = Path.GetFileName(imagePath);
+                    for (var index = 0; index < label.Length; index++)
+                    {
+                        if (!char.IsLetter(label[index]))
+                        {
+                            label = label.Substring(0, index);
+                            break;
+                        }
+                    }
+                    return (imagePath, label);
+                });
+        }
+
+        public static IEnumerable<InMemoryImageData> LoadInMemoryImagesFromDirectory(
+            string folder,
+            bool useFolderNameAsLabel = true)
+            => LoadImagesFromDirectory(folder, useFolderNameAsLabel)
+                .Select(x => new InMemoryImageData(
+                    image: File.ReadAllBytes(x.imagePath),
+                    label: x.label,
+                    imageFileName: Path.GetFileName(x.imagePath)));
+
+        public static string GetAbsolutePath(Assembly assembly, string relativePath)
+        {
+            var assemblyFolderPath = new FileInfo(assembly.Location).Directory.FullName;
+
+            return Path.Combine(assemblyFolderPath, relativePath);
+        }
+    }
+
+
+
     public class ImageData
     {
+
+        public ImageData(string imagePath, string label)
+        {
+            ImagePath = imagePath;
+            Label = label;
+        }
+
         public string ImagePath { get; set; }
         public byte[] ImageBytes { get; set; }
         public string Label { get; set; }
@@ -291,4 +504,129 @@ namespace WebcamObjectRecognition
             return bitmap;
         }
     }
+
+    public class InMemoryImageData
+    {
+        public InMemoryImageData(byte[] image, string label, string imageFileName)
+        {
+            Image = image;
+            Label = label;
+            ImageFileName = imageFileName;
+        }
+
+        public readonly byte[] Image;
+
+        public readonly string Label;
+
+        public readonly string ImageFileName;
+    }
+
+
+
+
+    public class Compress
+    {
+        public static void ExtractGZip(string gzipFileName, string targetDir)
+        {
+            // Use a 4K buffer. Any larger is a waste.    
+            byte[] dataBuffer = new byte[4096];
+
+            using (System.IO.Stream fs = new FileStream(gzipFileName, FileMode.Open, FileAccess.Read))
+            {
+                using (GZipInputStream gzipStream = new GZipInputStream(fs))
+                {
+                    // Change this to your needs
+                    string fnOut = Path.Combine(targetDir, Path.GetFileNameWithoutExtension(gzipFileName));
+
+                    using (FileStream fsOut = File.Create(fnOut))
+                    {
+                        StreamUtils.Copy(gzipStream, fsOut, dataBuffer);
+                    }
+                }
+            }
+        }
+
+        public static void UnZip(String gzArchiveName, String destFolder)
+        {
+            var flag = gzArchiveName.Split(Path.DirectorySeparatorChar).Last().Split('.').First() + ".bin";
+            if (File.Exists(Path.Combine(destFolder, flag))) return;
+
+            Console.WriteLine($"Extracting.");
+            var task = Task.Run(() =>
+            {
+                ZipFile.ExtractToDirectory(gzArchiveName, destFolder);
+            });
+
+            while (!task.IsCompleted)
+            {
+                Thread.Sleep(200);
+                Console.Write(".");
+            }
+
+            File.Create(Path.Combine(destFolder, flag));
+            Console.WriteLine("");
+            Console.WriteLine("Extracting is completed.");
+        }
+
+        public static void ExtractTGZ(String gzArchiveName, String destFolder)
+        {
+            var flag = gzArchiveName.Split(Path.DirectorySeparatorChar).Last().Split('.').First() + ".bin";
+            if (File.Exists(Path.Combine(destFolder, flag))) return;
+
+            Console.WriteLine($"Extracting.");
+            var task = Task.Run(() =>
+            {
+                using (var inStream = File.OpenRead(gzArchiveName))
+                {
+                    using (var gzipStream = new GZipInputStream(inStream))
+                    {
+                        using (TarArchive tarArchive = TarArchive.CreateInputTarArchive(gzipStream))
+                            tarArchive.ExtractContents(destFolder);
+                    }
+                }
+            });
+
+            while (!task.IsCompleted)
+            {
+                Thread.Sleep(200);
+                Console.Write(".");
+            }
+
+            File.Create(Path.Combine(destFolder, flag));
+            Console.WriteLine("");
+            Console.WriteLine("Extracting is completed.");
+        }
+    }
+    public class Web
+    {
+        public static bool Download(string url, string destDir, string destFileName)
+        {
+            if (destFileName == null)
+                destFileName = url.Split(Path.DirectorySeparatorChar).Last();
+
+            Directory.CreateDirectory(destDir);
+
+            string relativeFilePath = Path.Combine(destDir, destFileName);
+
+            if (File.Exists(relativeFilePath))
+            {
+                Console.WriteLine($"{relativeFilePath} already exists.");
+                return false;
+            }
+
+            var wc = new WebClient();
+            Console.WriteLine($"Downloading {relativeFilePath}");
+            var download = Task.Run(() => wc.DownloadFile(url, relativeFilePath));
+            while (!download.IsCompleted)
+            {
+                Thread.Sleep(1000);
+                Console.Write(".");
+            }
+            Console.WriteLine("");
+            Console.WriteLine($"Downloaded {relativeFilePath}");
+
+            return true;
+        }
+    }
+
 }
