@@ -61,7 +61,7 @@ namespace WebcamObjectRecognition
 
 
 
-        static void CreateModel()
+         void CreateModel()
         {
             string assetsPath = @"C:\Temp\MLTraining\assets";
 
@@ -74,21 +74,21 @@ namespace WebcamObjectRecognition
             string finalImagesFolderName = DownloadImageSet(imagesDownloadFolderPath);
             string fullImagesetFolderPath = Path.Combine(imagesDownloadFolderPath, finalImagesFolderName);
 
-            var mlContext = new MLContext(seed: 1);
+            _mlContext = new MLContext(seed: 1);
 
             // Specify MLContext Filter to only show feedback log/traces about ImageClassification
             // This is not needed for feedback output if using the explicit MetricsCallback parameter
-            mlContext.Log += FilterMLContextLog;
+            _mlContext.Log += FilterMLContextLog;
 
             // 2. Load the initial full image-set into an IDataView and shuffle so it'll be better balanced
             IEnumerable<ImageData> images = LoadImagesFromDirectory(folder: fullImagesetFolderPath, useFolderNameAsLabel: true);
-            IDataView fullImagesDataset = mlContext.Data.LoadFromEnumerable(images);
-            IDataView shuffledFullImageFilePathsDataset = mlContext.Data.ShuffleRows(fullImagesDataset);
+            IDataView fullImagesDataset = _mlContext.Data.LoadFromEnumerable(images);
+            IDataView shuffledFullImageFilePathsDataset = _mlContext.Data.ShuffleRows(fullImagesDataset);
 
             // 3. Load Images with in-memory type within the IDataView and Transform Labels to Keys (Categorical)
-            IDataView shuffledFullImagesDataset = mlContext.Transforms.Conversion.
+            IDataView shuffledFullImagesDataset = _mlContext.Transforms.Conversion.
                     MapValueToKey(outputColumnName: "LabelAsKey", inputColumnName: "Label", keyOrdinality: KeyOrdinality.ByValue)
-                .Append(mlContext.Transforms.LoadRawImageBytes(
+                .Append(_mlContext.Transforms.LoadRawImageBytes(
                                                 outputColumnName: "Image",
                                                 imageFolder: fullImagesetFolderPath,
                                                 inputColumnName: "ImagePath"))
@@ -96,39 +96,18 @@ namespace WebcamObjectRecognition
                 .Transform(shuffledFullImageFilePathsDataset);
 
             // 4. Split the data 80:20 into train and test sets, train and evaluate.
-            var trainTestData = mlContext.Data.TrainTestSplit(shuffledFullImagesDataset, testFraction: 0.2);
+            var trainTestData = _mlContext.Data.TrainTestSplit(shuffledFullImagesDataset, testFraction: 0.2);
             IDataView trainDataView = trainTestData.TrainSet;
             IDataView testDataView = trainTestData.TestSet;
 
             // 5. Define the model's training pipeline using DNN default values
             //
-            var pipeline = mlContext.MulticlassClassification.Trainers
+            var pipeline = _mlContext.MulticlassClassification.Trainers
                     .ImageClassification(featureColumnName: "Image",
                                          labelColumnName: "LabelAsKey",
                                          validationSet: testDataView)
-                .Append(mlContext.Transforms.Conversion.MapKeyToValue(outputColumnName: "PredictedLabel",
+                .Append(_mlContext.Transforms.Conversion.MapKeyToValue(outputColumnName: "PredictedLabel",
                                                                       inputColumnName: "PredictedLabel"));
-
-            // 5.1 (OPTIONAL) Define the model's training pipeline by using explicit hyper-parameters
-            //
-            //var options = new ImageClassificationTrainer.Options()
-            //{
-            //    FeatureColumnName = "Image",
-            //    LabelColumnName = "LabelAsKey",
-            //    // Just by changing/selecting InceptionV3/MobilenetV2/ResnetV250  
-            //    // you can try a different DNN architecture (TensorFlow pre-trained model). 
-            //    Arch = ImageClassificationTrainer.Architecture.MobilenetV2,
-            //    Epoch = 50,       //100
-            //    BatchSize = 10,
-            //    LearningRate = 0.01f,
-            //    MetricsCallback = (metrics) => Console.WriteLine(metrics),
-            //    ValidationSet = testDataView
-            //};
-
-            //var pipeline = mlContext.MulticlassClassification.Trainers.ImageClassification(options)
-            //        .Append(mlContext.Transforms.Conversion.MapKeyToValue(
-            //            outputColumnName: "PredictedLabel",
-            //            inputColumnName: "PredictedLabel"));
 
             // 6. Train/create the ML model
             Console.WriteLine("*** Training the image classification model with DNN Transfer Learning on top of the selected pre-trained model/architecture ***");
@@ -145,17 +124,14 @@ namespace WebcamObjectRecognition
             Console.WriteLine($"Training with transfer learning took: {elapsedMs / 1000} seconds");
 
             // 7. Get the quality metrics (accuracy, etc.)
-            EvaluateModel(mlContext, testDataView, trainedModel);
+            EvaluateModel(_mlContext, testDataView, trainedModel);
 
             // 8. Save the model to assets/outputs (You get ML.NET .zip model file and TensorFlow .pb model file)
-            mlContext.Model.Save(trainedModel, trainDataView.Schema, outputMlNetModelFilePath);
-            Console.WriteLine($"Model saved to: {outputMlNetModelFilePath}");
+            _mlContext.Model.Save(trainedModel, trainDataView.Schema, outputMlNetModelFilePath);
 
             // 9. Try a single prediction simulating an end-user app
-            TrySinglePrediction(imagesFolderPathForPredictions, mlContext, trainedModel);
+            TrySinglePrediction(imagesFolderPathForPredictions, _mlContext, trainedModel);
 
-            Console.WriteLine("Press any key to finish");
-            Console.ReadKey();
         }
 
         private static void EvaluateModel(MLContext mlContext, IDataView testDataset, ITransformer trainedModel)
@@ -354,6 +330,7 @@ namespace WebcamObjectRecognition
                 CaptureButton.IsEnabled = false;
                 TrainButton.IsEnabled = false;
                 DetectButton.Content = "Stop Detect Mode";
+                CreateModel();
                 Task.Run(() => TrainModel());
             }
             else
