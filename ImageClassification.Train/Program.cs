@@ -27,7 +27,7 @@ namespace ImageClassification
         static MLContext mlContext = new MLContext(seed: 1); // seed for reproducibility
 
         static ITransformer trainedModel = null;
-        private static VideoCapture _capture;
+        public  static VideoCapture _capture;
 
         public static void CreateDirectories()
         {
@@ -195,7 +195,7 @@ namespace ImageClassification
 
 
 
-        private static void InitializeCamera()
+        public  static void InitializeCamera()
         {
             _capture = new VideoCapture(0);
             if (!_capture.IsOpened())
@@ -210,6 +210,11 @@ namespace ImageClassification
             Console.WriteLine($"Press any key to take a pictures of {name}");
             Console.ReadKey();
             return TakePictures("-", number:1, sleepMs:0);
+        }
+
+        public static List<string> TakeSinglePicturesForPrediction()
+        {
+            return TakePictures("-", number: 1, sleepMs: 0);
         }
 
         public static List<string> TakePictures(string labelname, int number=1, int sleepMs=500)
