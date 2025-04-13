@@ -106,7 +106,7 @@ namespace ImageClassification
             Console.WriteLine($"Model saved to: {outputMlNetModelFilePath}");
 
             // 9. Try a single prediction simulating an end-user app
-            TrySinglePrediction(imagesFolderPathForPredictions, mlContext, trainedModel);
+            TryPrediction(imagesFolderPathForPredictions, mlContext, trainedModel);
 
             Console.WriteLine("Press any key to finish");
             Console.ReadKey();
@@ -130,23 +130,25 @@ namespace ImageClassification
             Console.WriteLine($"Predicting and Evaluation took: {elapsed2Ms / 1000} seconds");
         }
 
-        private static void TrySinglePrediction(string imagesFolderPathForPredictions, MLContext mlContext, ITransformer trainedModel)
+        private static void TryPrediction(string imagesFolderPathForPredictions, MLContext mlContext, ITransformer trainedModel)
         {
             // Create prediction function to try one prediction
-            var predictionEngine = mlContext.Model
-                .CreatePredictionEngine<InMemoryImageData, ImagePrediction>(trainedModel);
+            var predictionEngine = mlContext.Model.CreatePredictionEngine<InMemoryImageData, ImagePrediction>(trainedModel);
 
             var testImages = FileUtils.LoadInMemoryImagesFromDirectory(
                 imagesFolderPathForPredictions, false);
+            foreach(var image in testImages)
+            {
+                var prediction = predictionEngine.Predict(image);
 
-            var imageToPredict = testImages.First();
+                bool predicitonConfidenceFull = prediction.Score.Max() > 0.8;
+                string response = predicitonConfidenceFull ? "HighConfidence" : "Low confidence prediction, please check the image.";
 
-            var prediction = predictionEngine.Predict(imageToPredict);
+            Console.WriteLine($"Image Filename : [{image.ImageFileName}], " +
+                        $"Scores : [{string.Join(";", prediction.Score)}], " +
+                        $"Predicted Label : {prediction.PredictedLabel}  {response}");
 
-            Console.WriteLine(
-                $"Image Filename : [{imageToPredict.ImageFileName}], " +
-                $"Scores : [{string.Join(",", prediction.Score)}], " +
-                $"Predicted Label : {prediction.PredictedLabel}");
+            }
         }
 
 
