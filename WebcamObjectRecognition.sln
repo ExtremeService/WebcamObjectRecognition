@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebcamObjectRecognition", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ImageClassification.Train", "ImageClassification.Train\ImageClassification.Train.csproj", "{9F090395-B88F-473D-8FE1-B560A9097E58}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CLIDemo", "CLIDemo\CLIDemo.csproj", "{53E0DE17-F7BE-4C93-9B41-4F15D9BCCE71}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{9F090395-B88F-473D-8FE1-B560A9097E58}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9F090395-B88F-473D-8FE1-B560A9097E58}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9F090395-B88F-473D-8FE1-B560A9097E58}.Release|Any CPU.Build.0 = Release|Any CPU
+		{53E0DE17-F7BE-4C93-9B41-4F15D9BCCE71}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{53E0DE17-F7BE-4C93-9B41-4F15D9BCCE71}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{53E0DE17-F7BE-4C93-9B41-4F15D9BCCE71}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{53E0DE17-F7BE-4C93-9B41-4F15D9BCCE71}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

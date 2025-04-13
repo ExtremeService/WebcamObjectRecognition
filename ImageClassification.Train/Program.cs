@@ -10,15 +10,17 @@ using Microsoft.ML.Transforms;
 using Microsoft.ML.Vision;
 using static Microsoft.ML.Transforms.ValueToKeyMappingEstimator;
 
-namespace ImageClassification.Train
+namespace ImageClassification
 {
-    internal class Program
+    public class Model
     {
-        static void Main()
+        public static void CreateModel()
         {
             string assetsPath = @"C:\Temp\MLTraining\assets";
 
             string outputMlNetModelFilePath =       Path.Combine(assetsPath, "outputs", "imageClassifier.zip");
+            Directory.CreateDirectory(Path.GetDirectoryName(outputMlNetModelFilePath));
+            Directory.CreateDirectory("C:\\Temp\\MLTraining\\assets\\inputs\\test-images");
             string imagesFolderPathForPredictions = Path.Combine(assetsPath, "inputs", "test-images");
             string imagesDownloadFolderPath =       Path.Combine(assetsPath, "inputs", "images");
 
@@ -174,7 +176,7 @@ namespace ImageClassification.Train
         }
 
         public static string GetAbsolutePath(string relativePath)
-            => FileUtils.GetAbsolutePath(typeof(Program).Assembly, relativePath);
+            => FileUtils.GetAbsolutePath(typeof(Model).Assembly, relativePath);
 
         public static void ConsoleWriteImagePrediction(string ImagePath, string Label, string PredictedLabel, float Probability)
         {
