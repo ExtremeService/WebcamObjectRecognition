@@ -6,36 +6,50 @@ using System.Linq;
 using Common;
 using ImageClassification.DataModels;
 using Microsoft.ML;
-using Microsoft.ML.Transforms;
-using Microsoft.ML.Vision;
 using static Microsoft.ML.Transforms.ValueToKeyMappingEstimator;
+using OpenCvSharp;
+using System.Threading;
 
 namespace ImageClassification
 {
-    public class Model
+    public class MLModel
     {
+        static string assetsPath = @"C:\Temp\MLTraining\assets";
+        static string outputMlNetModelFilePath { get => Path.Combine(assetsPath, "outputs", outputMlNetModelFileName); set => throw new NotImplementedException(); }
+
+        public static string outputMlNetModelFileName { get; set; } = "imageClassifier.zip";
+        static string imagesFolderPathForPredictions { get; set; }  // store the test images, which are then predicted   
+        static string imagesFolderPathForTraining { get; set; } // store the training material
+
+
+        static PredictionEngine<InMemoryImageData, ImagePrediction> predictionEngine;
+
+        static MLContext mlContext = new MLContext(seed: 1); // seed for reproducibility
+
+        static ITransformer trainedModel = null;
+        private static VideoCapture _capture;
+
+        public static void CreateDirectories()
+        {
+            Directory.CreateDirectory(assetsPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(outputMlNetModelFilePath));
+            imagesFolderPathForPredictions = Path.Combine(assetsPath, "inputs", "test-images"); // store the test images, which are then predicted   
+            imagesFolderPathForTraining =       Path.Combine(assetsPath, "inputs", "images"); // store the training material
+            Directory.CreateDirectory(imagesFolderPathForPredictions);
+            Directory.CreateDirectory(imagesFolderPathForTraining);
+
+        }
+
+
         public static void CreateModel()
         {
-            string assetsPath = @"C:\Temp\MLTraining\assets";
-
-            string outputMlNetModelFilePath =       Path.Combine(assetsPath, "outputs", "imageClassifier.zip");
-            Directory.CreateDirectory(Path.GetDirectoryName(outputMlNetModelFilePath));
-            Directory.CreateDirectory("C:\\Temp\\MLTraining\\assets\\inputs\\test-images");
-            string imagesFolderPathForPredictions = Path.Combine(assetsPath, "inputs", "test-images");
-            string imagesDownloadFolderPath =       Path.Combine(assetsPath, "inputs", "images");
-
-            // 1. Download the image set and unzip
-            string finalImagesFolderName = DownloadImageSet(imagesDownloadFolderPath);
-            string fullImagesetFolderPath = Path.Combine(imagesDownloadFolderPath, finalImagesFolderName);
-
-            var mlContext = new MLContext(seed: 1);
 
             // Specify MLContext Filter to only show feedback log/traces about ImageClassification
             // This is not needed for feedback output if using the explicit MetricsCallback parameter
             mlContext.Log += FilterMLContextLog;           
 
             // 2. Load the initial full image-set into an IDataView and shuffle so it'll be better balanced
-            IEnumerable<ImageData> images = LoadImagesFromDirectory(folder: fullImagesetFolderPath, useFolderNameAsLabel: true);
+            IEnumerable<ImageData> images = LoadImagesFromDirectory(folder: imagesFolderPathForTraining, useFolderNameAsLabel: true);
             IDataView fullImagesDataset = mlContext.Data.LoadFromEnumerable(images);
             IDataView shuffledFullImageFilePathsDataset = mlContext.Data.ShuffleRows(fullImagesDataset);
 
@@ -44,7 +58,7 @@ namespace ImageClassification
                     MapValueToKey(outputColumnName: "LabelAsKey", inputColumnName: "Label", keyOrdinality: KeyOrdinality.ByValue)
                 .Append(mlContext.Transforms.LoadRawImageBytes(
                                                 outputColumnName: "Image",
-                                                imageFolder: fullImagesetFolderPath,
+                                                imageFolder: imagesFolderPathForTraining,
                                                 inputColumnName: "ImagePath"))
                 .Fit(shuffledFullImageFilePathsDataset)
                 .Transform(shuffledFullImageFilePathsDataset);
@@ -91,7 +105,7 @@ namespace ImageClassification
             var watch = Stopwatch.StartNew();
 
             //Train
-            ITransformer trainedModel = pipeline.Fit(trainDataView);
+            trainedModel = pipeline.Fit(trainDataView);
 
             watch.Stop();
             var elapsedMs = watch.ElapsedMilliseconds;
@@ -106,10 +120,8 @@ namespace ImageClassification
             Console.WriteLine($"Model saved to: {outputMlNetModelFilePath}");
 
             // 9. Try a single prediction simulating an end-user app
-            TryPrediction(imagesFolderPathForPredictions, mlContext, trainedModel);
+            TryPredictionForFolder(imagesFolderPathForPredictions, mlContext, trainedModel);
 
-            Console.WriteLine("Press any key to finish");
-            Console.ReadKey();
         }
        
         private static void EvaluateModel(MLContext mlContext, IDataView testDataset, ITransformer trainedModel)
@@ -130,25 +142,96 @@ namespace ImageClassification
             Console.WriteLine($"Predicting and Evaluation took: {elapsed2Ms / 1000} seconds");
         }
 
-        private static void TryPrediction(string imagesFolderPathForPredictions, MLContext mlContext, ITransformer trainedModel)
+        public static void TryPredictionForFolder(string imagesFolderPathForPredictions, MLContext mlContext, ITransformer trainedModel, double treshold=0.8)
         {
             // Create prediction function to try one prediction
             var predictionEngine = mlContext.Model.CreatePredictionEngine<InMemoryImageData, ImagePrediction>(trainedModel);
 
-            var testImages = FileUtils.LoadInMemoryImagesFromDirectory(
-                imagesFolderPathForPredictions, false);
+            var testImages = FileUtils.LoadInMemoryImagesFromDirectory(imagesFolderPathForPredictions, false);
+
             foreach(var image in testImages)
             {
                 var prediction = predictionEngine.Predict(image);
 
-                bool predicitonConfidenceFull = prediction.Score.Max() > 0.8;
-                string response = predicitonConfidenceFull ? "HighConfidence" : "Low confidence prediction, please check the image.";
+                bool predicitonConfidenceFull = prediction.Score.Max() > treshold;
+                string response = predicitonConfidenceFull ? "High confidence" : "Low confidence prediction, please check the image.";
 
-            Console.WriteLine($"Image Filename : [{image.ImageFileName}], " +
+                Console.WriteLine($"Image Filename : [{image.ImageFileName}], " +
                         $"Scores : [{string.Join(";", prediction.Score)}], " +
                         $"Predicted Label : {prediction.PredictedLabel}  {response}");
 
             }
+        }
+
+
+
+        public static void LoadModel(string FullFilePath)
+        {
+
+            using (var stream = new FileStream(outputMlNetModelFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                trainedModel = mlContext.Model.Load(stream, out var modelInputSchema);
+            }
+            predictionEngine = mlContext.Model.CreatePredictionEngine<InMemoryImageData, ImagePrediction>(trainedModel);
+
+        }
+
+        public static ImagePrediction LoadModelandPredict(string FullFilePath, double threshold = 0.8)
+        {
+            LoadModel(FullFilePath);
+            var Image = FileUtils.LoadInMemorySingleImageFromDirectory(FullFilePath);
+            ImagePrediction prediction = predictionEngine.Predict(Image);
+
+            bool predicitonConfidenceFull = prediction.Score.Max() > threshold;
+            string response = predicitonConfidenceFull ? "High confidence" : "Low confidence prediction, please check the image.";
+
+            Console.WriteLine($"Image Filename : [{Image.ImageFileName}], " +
+                    $"Scores : [{string.Join(";", prediction.Score)}], " +
+                    $"Predicted Label : {prediction.PredictedLabel}  {response}");
+
+
+            return prediction;
+        }
+
+
+
+        private static void InitializeCamera()
+        {
+            _capture = new VideoCapture(0);
+            if (!_capture.IsOpened())
+            {
+                throw new Exception("Camera not found");
+            }
+        }
+
+
+        public static List<string> TakeSinglePicturesForPrediction(string name)
+        {
+            Console.WriteLine($"Press any key to take a pictures of {name}");
+            Console.ReadKey();
+            return TakePictures("-", number:1, sleepMs:0);
+        }
+
+        public static List<string> TakePictures(string labelname, int number=1, int sleepMs=500)
+        {
+            if (_capture == null)
+            {
+                InitializeCamera();
+            }
+            var frame = _capture.RetrieveMat();
+            var labelDir = Path.Combine(imagesFolderPathForTraining, labelname);
+
+            Directory.CreateDirectory(labelDir);
+            List<string> imgPaths = new List<string>();
+            for (int i = 0; i< number; i++)
+            {
+                var timestamp = DateTime.Now.Ticks;
+                var imgPath = Path.Combine(labelDir, $"{timestamp}.jpg");
+                frame.ImWrite(imgPath);
+                imgPaths.Add(imgPath);
+                if(number!=1)  Thread.Sleep(sleepMs);  
+            }
+            return imgPaths;
         }
 
 
@@ -178,7 +261,7 @@ namespace ImageClassification
         }
 
         public static string GetAbsolutePath(string relativePath)
-            => FileUtils.GetAbsolutePath(typeof(Model).Assembly, relativePath);
+            => FileUtils.GetAbsolutePath(typeof(MLModel).Assembly, relativePath);
 
         public static void ConsoleWriteImagePrediction(string ImagePath, string Label, string PredictedLabel, float Probability)
         {
