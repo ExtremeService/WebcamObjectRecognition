@@ -13,8 +13,10 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10">
             <TextBlock Text="Status: " FontSize="16"/>
             <TextBlock x:Name="StatusText" Text="Idle" FontSize="16" Foreground="Green"/>
-            <TextBlock Text=" Label: " FontSize="16" Margin="20,0,0,0"/>
-            <TextBox x:Name="LabelInput" Width="150" FontSize="16"/>
+            <Grid Height="23" Width="199">
+                <TextBlock Text=" Label: " FontSize="16" Margin="255,0,-106,0"/>
+                <TextBox x:Name="LabelInput" FontSize="16" Margin="310,0,-261,0"/>
+            </Grid>
         </StackPanel>
 
         <!-- Webcam Feed -->
@@ -25,7 +27,13 @@
             <TabItem Header="TabItem">
                 <Grid Background="#FFE5E5E5">
                     <Button x:Name="TrainButton" Content="Start Train Mode" Margin="187,24,486,24" Click="TrainButton_Click"/>
-                    <Button x:Name="CaptureButton" Content="Capture" Width="100" Margin="420,24,320,24" Click="CaptureButton_Click" IsEnabled="False"/>
+                    <Button x:Name="CaptureButton" Content="Capture" Margin="420,24,266,24" Click="CaptureButton_Click" IsEnabled="False"/>
+                    <Button x:Name="Files" Content="ShowFiles" HorizontalAlignment="Left" Margin="641,0,0,0" VerticalAlignment="Center" Height="68.04" Width="154" Click="Files_Click"/>
+                </Grid>
+            </TabItem>
+            <TabItem Header="Train" Height="20" VerticalAlignment="Top">
+                <Grid Background="#FFE5E5E5">
+                    <Button x:Name="TrainModel" Content="Train Model" Width="120" Margin="289,19,352,29" Click="Train_Click" Grid.Column="2"/>
                 </Grid>
             </TabItem>
             <TabItem Header="TabItem">
@@ -43,7 +51,7 @@
                 </Grid>
             </TabItem>
         </TabControl>
-        <TextBox HorizontalAlignment="Left" Margin="579,34,0,0" Grid.Row="1" TextWrapping="Wrap" Text="TextBox" VerticalAlignment="Top" Width="221" Height="374" TextChanged="TextBox_TextChanged"/>
+        <TextBox x:Name="OutputBox" HorizontalAlignment="Left" Margin="672,19,0,0" Grid.Row="1" TextWrapping="Wrap" VerticalAlignment="Top" Width="154" Height="413" IsEnabled="False"/>
 
     </Grid>
 </Window>

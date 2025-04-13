@@ -24,6 +24,12 @@ using static ImageClassification.MLModel;
 using ImageClassification;
 using ImageClassification.DataModels;
 using System.Windows.Media;
+using System.Windows.Controls;
+using static Community.CsharpSqlite.Sqlite3;
+using Tensorflow.Contexts;
+using Tensorflow.Train;
+using System.Collections.Concurrent;
+using IronPython.Runtime;
 
 
 namespace WebcamObjectRecognition
@@ -36,7 +42,7 @@ namespace WebcamObjectRecognition
         private string _label;
         private MLContext _mlContext;
         private PredictionEngine<ImageData, ImagePrediction> _predictionEngine;
-
+        static ConcurrentQueue<string> MLTraining_status;
         public MainWindow()
         {
             InitializeComponent();
@@ -45,8 +51,23 @@ namespace WebcamObjectRecognition
             _detectMode = false;
             _label = "";
             _mlContext = new MLContext();
-            Task.Run(() => ProcessCameraFeed());
+            Task.Run(() => ProcessCameraFeed());            
             CreateDirectories();
+        }
+
+        private async void UpdateMLOutput()
+        {
+            string status="";
+            while (string.IsNullOrEmpty (status) || !status.Contains("Model computed"))
+            {
+                TrainModel.IsEnabled = false;
+                if (MLTraining_status.TryDequeue(out status))
+                {
+                    OutputBox.Text = status + Environment.NewLine + OutputBox.Text;
+                }
+                await Task.Delay(100);
+            }
+            TrainModel.IsEnabled = true;
         }
 
         private async void ProcessCameraFeed()
@@ -69,18 +90,7 @@ namespace WebcamObjectRecognition
 
                     if (_detectMode && _predictionEngine != null)
                     {
-                        var prediction = PredictImage(frame);
-                        float maxScore = prediction.Score?.Max() ?? 0f;
-                        if (maxScore > 0.7f)
-                        {
-                            StatusText.Text = $"Detected: {prediction.Label} ({maxScore:F2})";
-                            StatusText.Foreground = System.Windows.Media.Brushes.Red;
-                        }
-                        else
-                        {
-                            StatusText.Text = "Detect Mode";
-                            StatusText.Foreground = System.Windows.Media.Brushes.Green;
-                        }
+                        
                     }
                 });
                 await Task.Delay(33); // ~30 FPS
@@ -92,10 +102,10 @@ namespace WebcamObjectRecognition
             {
                 if (string.IsNullOrWhiteSpace(LabelInput.Text))
                 {
-                    var a = LabelInput.Background;
                     LabelInput.BorderBrush = new SolidColorBrush(Colors.Red);
                     return;
                 }
+                LabelInput.BorderBrush = new SolidColorBrush(Colors.Black);
                 LabelInput.Background = System.Windows.Media.Brushes.Green;
                 _label = LabelInput.Text.Trim();
                 _trainMode = true;
@@ -163,19 +173,6 @@ namespace WebcamObjectRecognition
             Close();
         }
 
-   
-
-        private ImagePrediction PredictImage(Mat img)
-        {
-            try
-            {
-                return new ImagePrediction { Label = "Unknown", Score = new float[] { 0f } };
-            }
-            catch
-            {
-                return new ImagePrediction { Label = "Unknown", Score = new float[] { 0f } };
-            }
-        }
 
         private void ResetToIdle()
         {
@@ -195,61 +192,26 @@ namespace WebcamObjectRecognition
         private void Train_Click(object sender, RoutedEventArgs e)
         {
             MLModel.outputMlNetModelFileName = "MLModel.zip";
-            Task.Run(() => CreateModel());
+            if (MLTraining_status == null)
+            {
+                MLTraining_status = new ConcurrentQueue<string>();
+            }
+            Task.Run(() => CreateModel(MLTraining_status));
+            UpdateMLOutput();
         }
 
-        private void TextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        private void Files_Click(object sender, RoutedEventArgs e)
         {
-
+            string tempfolder = Path.Combine(imagesFolderPathForTraining, LabelInput.Text.Trim());
+            Directory.CreateDirectory(tempfolder);
+            var psi = new ProcessStartInfo();
+            psi.FileName = @"c:\windows\explorer.exe";
+            psi.Arguments = tempfolder;
+            Process.Start(psi);
         }
     }
 
-    public class FileUtils
-    {
-        public static IEnumerable<(string imagePath, string label)> LoadImagesFromDirectory(
-            string folder,
-            bool useFolderNameasLabel)
-        {
-            var imagesPath = Directory
-                .GetFiles(folder, "*", searchOption: SearchOption.AllDirectories)
-                .Where(x => Path.GetExtension(x) == ".jpg" || Path.GetExtension(x) == ".png");
 
-            return useFolderNameasLabel
-                ? imagesPath.Select(imagePath => (imagePath, Directory.GetParent(imagePath).Name))
-                : imagesPath.Select(imagePath =>
-                {
-                    var label = Path.GetFileName(imagePath);
-                    for (var index = 0; index < label.Length; index++)
-                    {
-                        if (!char.IsLetter(label[index]))
-                        {
-                            label = label.Substring(0, index);
-                            break;
-                        }
-                    }
-                    return (imagePath, label);
-                });
-        }
-
-        public static IEnumerable<InMemoryImageData> LoadInMemoryImagesFromDirectory(
-            string folder,
-            bool useFolderNameAsLabel = true)
-            => LoadImagesFromDirectory(folder, useFolderNameAsLabel)
-                .Select(x => new InMemoryImageData(
-                    image: File.ReadAllBytes(x.imagePath),
-                    label: x.label,
-                    imageFileName: Path.GetFileName(x.imagePath)));
-
-   
-    }
-
-
-    public class ImagePrediction
-    {
-        [ColumnName("PredictedLabel")]
-        public string Label { get; set; }
-        public float[] Score { get; set; }
-    }
 
     public static class OpenCvSharpExtensions
     {

@@ -9,6 +9,7 @@ using Microsoft.ML;
 using static Microsoft.ML.Transforms.ValueToKeyMappingEstimator;
 using OpenCvSharp;
 using System.Threading;
+using System.Collections.Concurrent;
 
 namespace ImageClassification
 {
@@ -19,7 +20,7 @@ namespace ImageClassification
 
         public static string outputMlNetModelFileName { get; set; } = "imageClassifier.zip";
         static string imagesFolderPathForPredictions { get; set; }  // store the test images, which are then predicted   
-        static string imagesFolderPathForTraining { get; set; } // store the training material
+        public static string imagesFolderPathForTraining { get; set; } // store the training material
 
 
         static PredictionEngine<InMemoryImageData, ImagePrediction> predictionEngine;
@@ -41,13 +42,14 @@ namespace ImageClassification
         }
 
 
-        public static void CreateModel()
+        public static void CreateModel(ConcurrentQueue<string> mlTraining_status)
         {
 
             // Specify MLContext Filter to only show feedback log/traces about ImageClassification
             // This is not needed for feedback output if using the explicit MetricsCallback parameter
-            mlContext.Log += FilterMLContextLog;           
+            mlContext.Log += FilterMLContextLog;
 
+            mlTraining_status.Enqueue("0% starting ML.NET image classification training...");
             // 2. Load the initial full image-set into an IDataView and shuffle so it'll be better balanced
             IEnumerable<ImageData> images = LoadImagesFromDirectory(folder: imagesFolderPathForTraining, useFolderNameAsLabel: true);
             IDataView fullImagesDataset = mlContext.Data.LoadFromEnumerable(images);
@@ -62,6 +64,8 @@ namespace ImageClassification
                                                 inputColumnName: "ImagePath"))
                 .Fit(shuffledFullImageFilePathsDataset)
                 .Transform(shuffledFullImageFilePathsDataset);
+            mlTraining_status.Enqueue($"20% Load Images with in-memory type within the IDataView and Transform Labels to Keys (Categorical)");
+
 
             // 4. Split the data 80:20 into train and test sets, train and evaluate.
             var trainTestData = mlContext.Data.TrainTestSplit(shuffledFullImagesDataset, testFraction: 0.2);
@@ -100,7 +104,7 @@ namespace ImageClassification
 
             // 6. Train/create the ML model
             Console.WriteLine("*** Training the image classification model with DNN Transfer Learning on top of the selected pre-trained model/architecture ***");
-
+            mlTraining_status.Enqueue("60% DNN Transfer Learning");
             // Measuring training time
             var watch = Stopwatch.StartNew();
 
@@ -111,17 +115,17 @@ namespace ImageClassification
             var elapsedMs = watch.ElapsedMilliseconds;
 
             Console.WriteLine($"Training with transfer learning took: {elapsedMs / 1000} seconds");
-
+            mlTraining_status.Enqueue($"80% Training with transfer learning took: {elapsedMs / 1000} seconds");
             // 7. Get the quality metrics (accuracy, etc.)
             EvaluateModel(mlContext, testDataView, trainedModel);
 
             // 8. Save the model to assets/outputs (You get ML.NET .zip model file and TensorFlow .pb model file)
             mlContext.Model.Save(trainedModel, trainDataView.Schema, outputMlNetModelFilePath);
-            Console.WriteLine($"Model saved to: {outputMlNetModelFilePath}");
+            mlTraining_status.Enqueue("90% saving the model");
 
             // 9. Try a single prediction simulating an end-user app
             TryPredictionForFolder(imagesFolderPathForPredictions, mlContext, trainedModel);
-
+            mlTraining_status.Enqueue("100% Model computed");
         }
        
         private static void EvaluateModel(MLContext mlContext, IDataView testDataset, ITransformer trainedModel)
@@ -223,13 +227,13 @@ namespace ImageClassification
             {
                 InitializeCamera();
             }
-            var frame = _capture.RetrieveMat();
             var labelDir = Path.Combine(imagesFolderPathForTraining, labelname);
 
             Directory.CreateDirectory(labelDir);
             List<string> imgPaths = new List<string>();
             for (int i = 0; i< number; i++)
             {
+                var frame = _capture.RetrieveMat();
                 var timestamp = DateTime.Now.Ticks;
                 var imgPath = Path.Combine(labelDir, $"{timestamp}.jpg");
                 frame.ImWrite(imgPath);
