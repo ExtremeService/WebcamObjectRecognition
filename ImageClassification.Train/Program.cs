@@ -10,6 +10,8 @@ using static Microsoft.ML.Transforms.ValueToKeyMappingEstimator;
 using OpenCvSharp;
 using System.Threading;
 using System.Collections.Concurrent;
+using System.Threading.Tasks;
+using Google.Protobuf;
 
 namespace ImageClassification
 {
@@ -22,6 +24,9 @@ namespace ImageClassification
         static string imagesFolderPathForPredictions { get; set; }  // store the test images, which are then predicted   
         public static string imagesFolderPathForTraining { get; set; } // store the training material
 
+        public static List<string> NewPicturesTaken  { get; set; } = new List<string>();
+
+        public static bool DetectionRunning { get; set; } 
 
         static PredictionEngine<InMemoryImageData, ImagePrediction> predictionEngine;
 
@@ -169,9 +174,12 @@ namespace ImageClassification
 
 
 
-        public static void LoadModel(string FullFilePath)
+        public static void LoadModel()
         {
-
+            if (predictionEngine != null)
+            {
+                return;
+            }
             using (var stream = new FileStream(outputMlNetModelFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 trainedModel = mlContext.Model.Load(stream, out var modelInputSchema);
@@ -180,9 +188,9 @@ namespace ImageClassification
 
         }
 
-        public static ImagePrediction LoadModelandPredict(string FullFilePath, double threshold = 0.8)
+        public static ImagePrediction LoadModelandPredict(string FullFilePath, double threshold, ConcurrentQueue<string> mlTraining_status)
         {
-            LoadModel(FullFilePath);
+            LoadModel();
             var Image = FileUtils.LoadInMemorySingleImageFromDirectory(FullFilePath);
             ImagePrediction prediction = predictionEngine.Predict(Image);
 
@@ -193,7 +201,9 @@ namespace ImageClassification
                     $"Scores : [{string.Join(";", prediction.Score)}], " +
                     $"Predicted Label : {prediction.PredictedLabel}  {response}");
 
-
+            mlTraining_status.Enqueue($"Image Filename : [{Image.ImageFileName}], " +
+                    $"Scores : [{string.Join(";", prediction.Score)}], " +
+                    $"Predicted Label : {prediction.PredictedLabel}  {response}");
             return prediction;
         }
 
@@ -209,38 +219,53 @@ namespace ImageClassification
         }
 
 
-        public static List<string> TakeSinglePicturesForPrediction(string name)
+
+        public static async Task TakeSinglePicturesForPrediction(ConcurrentQueue<string> Messages)
         {
-            Console.WriteLine($"Press any key to take a pictures of {name}");
-            Console.ReadKey();
-            return TakePictures("-", number:1, sleepMs:0);
+            DetectionRunning = true;
+            while (true && DetectionRunning)
+            {
+                await TakePictures("-", number: 1, sleepMs: 0, Messages);
+                LoadModelandPredict(NewPicturesTaken[0], 0.8, Messages);
+                await Task.Delay(2000);
+            }
         }
 
-        public static List<string> TakeSinglePicturesForPrediction()
-        {
-            return TakePictures("-", number: 1, sleepMs: 0);
-        }
-
-        public static List<string> TakePictures(string labelname, int number=1, int sleepMs=500)
+        public static async Task TakePictures(string labelname, int number, int sleepMs, ConcurrentQueue<string> Messages)
         {
             if (_capture == null)
             {
                 InitializeCamera();
             }
-            var labelDir = Path.Combine(imagesFolderPathForTraining, labelname);
+            var labelDir = "";
+            if (labelname == "-")
+            {
+                labelDir = Path.GetTempPath();
+            }
+            else
+            {
+                labelDir = Path.Combine(imagesFolderPathForTraining, labelname);
+                Directory.CreateDirectory(labelDir);
+            }
 
-            Directory.CreateDirectory(labelDir);
-            List<string> imgPaths = new List<string>();
             for (int i = 0; i< number; i++)
             {
                 var frame = _capture.RetrieveMat();
                 var timestamp = DateTime.Now.Ticks;
                 var imgPath = Path.Combine(labelDir, $"{timestamp}.jpg");
                 frame.ImWrite(imgPath);
-                imgPaths.Add(imgPath);
-                if(number!=1)  Thread.Sleep(sleepMs);  
+                NewPicturesTaken.Add(imgPath);
+                if(number!=1)  await Task.Delay(sleepMs);
+                Messages.Enqueue($"Pcitures {i} of total {number} taken");
             }
-            return imgPaths;
+            if (labelname != "-")
+            {
+                Messages.Enqueue($"100% Photos done");
+            }
+            else
+            {
+                Messages.Enqueue($"Photo taken");
+            }
         }
 
 

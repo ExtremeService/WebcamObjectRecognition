@@ -30,6 +30,7 @@ using Tensorflow.Contexts;
 using Tensorflow.Train;
 using System.Collections.Concurrent;
 using IronPython.Runtime;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 
 namespace WebcamObjectRecognition
@@ -42,7 +43,7 @@ namespace WebcamObjectRecognition
         private string _label;
         private MLContext _mlContext;
         private PredictionEngine<ImageData, ImagePrediction> _predictionEngine;
-        static ConcurrentQueue<string> MLTraining_status;
+        static ConcurrentQueue<string> Messages = new ConcurrentQueue<string>();
         public MainWindow()
         {
             InitializeComponent();
@@ -55,13 +56,13 @@ namespace WebcamObjectRecognition
             CreateDirectories();
         }
 
-        private async void UpdateMLOutput()
+        private async void UpdateOutput()
         {
             string status="";
-            while (string.IsNullOrEmpty (status) || !status.Contains("Model computed"))
+            while (string.IsNullOrEmpty (status) || !status.Contains("100%"))
             {
                 TrainModel.IsEnabled = false;
-                if (MLTraining_status.TryDequeue(out status))
+                if (Messages.TryDequeue(out status))
                 {
                     OutputBox.Text = status + Environment.NewLine + OutputBox.Text;
                 }
@@ -130,7 +131,9 @@ namespace WebcamObjectRecognition
 
         private void CaptureButton_Click(object sender, RoutedEventArgs e)
         {
-            TakePictures(LabelInput.Text.Trim(), 10,200);
+            var tempLabel = LabelInput.Text.Trim();
+            Task.Run(() => TakePictures(tempLabel, 10, 200, Messages));
+            UpdateOutput();
         }
 
         private void DetectButton_Click(object sender, RoutedEventArgs e)
@@ -138,15 +141,9 @@ namespace WebcamObjectRecognition
             if (!_detectMode)
             {
                 _detectMode = true;
-                _trainMode = false;
-                StatusText.Text = "Training...";
-                StatusText.Foreground = System.Windows.Media.Brushes.Green;
-                LabelInput.IsEnabled = false;
-                CaptureButton.IsEnabled = false;
                 DetectButton.Content = "Stop Detect Mode";
-                var a  = TakeSinglePicturesForPrediction();
-                var prediction = LoadModelandPredict(a[0]);
-
+                Task.Run(() => TakeSinglePicturesForPrediction(Messages));
+                UpdateOutput();
 
             }
             else
@@ -159,6 +156,8 @@ namespace WebcamObjectRecognition
                 DetectButton.Content = "Start Detect Mode";
                 _predictionEngine?.Dispose();
                 _predictionEngine = null;
+                Messages.Enqueue("100% Detect Mode Stopped");
+                DetectionRunning = false;
             }
         }
 
@@ -188,12 +187,12 @@ namespace WebcamObjectRecognition
         private void Train_Click(object sender, RoutedEventArgs e)
         {
             MLModel.outputMlNetModelFileName = "MLModel.zip";
-            if (MLTraining_status == null)
+            if (Messages == null)
             {
-                MLTraining_status = new ConcurrentQueue<string>();
+                Messages = new ConcurrentQueue<string>();
             }
-            Task.Run(() => CreateModel(MLTraining_status));
-            UpdateMLOutput();
+            Task.Run(() => CreateModel(Messages));
+            UpdateOutput();
         }
 
         private void Files_Click(object sender, RoutedEventArgs e)
