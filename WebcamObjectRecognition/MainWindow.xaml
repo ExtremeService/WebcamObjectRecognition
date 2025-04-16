@@ -13,10 +13,6 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10">
             <TextBlock Text="Status: " FontSize="16"/>
             <TextBlock x:Name="StatusText" Text="Idle" FontSize="16" Foreground="Green"/>
-            <Grid Height="23" Width="199">
-                <TextBlock Text=" Label: " FontSize="16" Margin="255,0,-106,0"/>
-                <TextBox x:Name="LabelInput" FontSize="16" Margin="310,0,-261,0"/>
-            </Grid>
         </StackPanel>
 
         <!-- Webcam Feed -->
@@ -24,11 +20,14 @@
 
         <!-- Buttons -->
         <TabControl Grid.Row="1" Margin="0,432,0,0">
-            <TabItem Header="TabItem">
+            <TabItem Header="Capture">
                 <Grid Background="#FFE5E5E5">
-                    <Button x:Name="TrainButton" Content="Start Train Mode" Margin="187,24,486,24" Click="TrainButton_Click"/>
-                    <Button x:Name="CaptureButton" Content="Capture" Margin="420,24,266,24" Click="CaptureButton_Click" IsEnabled="False"/>
-                    <Button x:Name="Files" Content="ShowFiles" HorizontalAlignment="Left" Margin="641,0,0,0" VerticalAlignment="Center" Height="68.04" Width="154" Click="Files_Click"/>
+                    <Grid Margin="0,0,0,10">
+                        <TextBlock Text=" Label: " FontSize="16" Margin="78,19,668,19"/>
+                        <TextBox x:Name="LabelInput" FontSize="16" Margin="203,29,481,10" TextChanged="LabelInput_TextChanged"/>
+                        <Button x:Name="CaptureButton" Content="Capture" Margin="387,28,299,10" Click="CaptureButton_Click" IsEnabled="False"/>
+                        <Button x:Name="FileButton" Content="ShowFiles" HorizontalAlignment="Left" Margin="637,24,0,0" VerticalAlignment="Top" Height="68" Width="154" Click="Files_Click" IsEnabled="False"/>
+                    </Grid>
                 </Grid>
             </TabItem>
             <TabItem Header="Train" Height="20" VerticalAlignment="Top">

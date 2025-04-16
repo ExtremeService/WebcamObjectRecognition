@@ -114,7 +114,7 @@ namespace WebcamObjectRecognition
                 StatusText.Foreground = System.Windows.Media.Brushes.Green;
                 LabelInput.IsEnabled = false;
                 CaptureButton.IsEnabled = true;
-                TrainButton.Content = "Stop Train Mode";
+
                 DetectButton.IsEnabled = false;                
             }
             else
@@ -124,14 +124,13 @@ namespace WebcamObjectRecognition
                 StatusText.Foreground = System.Windows.Media.Brushes.Green;
                 LabelInput.IsEnabled = true;
                 CaptureButton.IsEnabled = false;
-                TrainButton.Content = "Start Train Mode";
                 DetectButton.IsEnabled = true;
             }
         }
 
         private void CaptureButton_Click(object sender, RoutedEventArgs e)
         {
-            TakePictures(_label,10,200);
+            TakePictures(LabelInput.Text.Trim(), 10,200);
         }
 
         private void DetectButton_Click(object sender, RoutedEventArgs e)
@@ -144,7 +143,6 @@ namespace WebcamObjectRecognition
                 StatusText.Foreground = System.Windows.Media.Brushes.Green;
                 LabelInput.IsEnabled = false;
                 CaptureButton.IsEnabled = false;
-                TrainButton.IsEnabled = false;
                 DetectButton.Content = "Stop Detect Mode";
                 var a  = TakeSinglePicturesForPrediction();
                 var prediction = LoadModelandPredict(a[0]);
@@ -158,7 +156,6 @@ namespace WebcamObjectRecognition
                 StatusText.Foreground = System.Windows.Media.Brushes.Green;
                 LabelInput.IsEnabled = true;
                 CaptureButton.IsEnabled = false;
-                TrainButton.IsEnabled = true;
                 DetectButton.Content = "Start Detect Mode";
                 _predictionEngine?.Dispose();
                 _predictionEngine = null;
@@ -182,7 +179,6 @@ namespace WebcamObjectRecognition
             StatusText.Foreground = System.Windows.Media.Brushes.Green;
             LabelInput.IsEnabled = true;
             CaptureButton.IsEnabled = false;
-            TrainButton.IsEnabled = true;
             DetectButton.Content = "Start Detect Mode";
             DetectButton.IsEnabled = true;
             _predictionEngine?.Dispose();
@@ -208,6 +204,12 @@ namespace WebcamObjectRecognition
             psi.FileName = @"c:\windows\explorer.exe";
             psi.Arguments = tempfolder;
             Process.Start(psi);
+        }
+
+        private void LabelInput_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            CaptureButton.IsEnabled = (LabelInput.Text.Length > 0);
+            FileButton.IsEnabled = (LabelInput.Text.Length > 0);
         }
     }
 
