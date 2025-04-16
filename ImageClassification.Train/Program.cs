@@ -126,7 +126,7 @@ namespace ImageClassification
 
             // 8. Save the model to assets/outputs (You get ML.NET .zip model file and TensorFlow .pb model file)
             mlContext.Model.Save(trainedModel, trainDataView.Schema, outputMlNetModelFilePath);
-            mlTraining_status.Enqueue("90% saving the model");
+            mlTraining_status.Enqueue($"90% saving the model under {outputMlNetModelFilePath} ");
 
             // 9. Try a single prediction simulating an end-user app
             TryPredictionForFolder(imagesFolderPathForPredictions, mlContext, trainedModel);
@@ -174,7 +174,7 @@ namespace ImageClassification
 
 
 
-        public static void LoadModel()
+        public static void LoadModel(ConcurrentQueue<string> mlTraining_status)
         {
             if (predictionEngine != null)
             {
@@ -185,12 +185,12 @@ namespace ImageClassification
                 trainedModel = mlContext.Model.Load(stream, out var modelInputSchema);
             }
             predictionEngine = mlContext.Model.CreatePredictionEngine<InMemoryImageData, ImagePrediction>(trainedModel);
-
+            mlTraining_status.Enqueue($"loading model from {outputMlNetModelFilePath} ");
         }
 
         public static ImagePrediction LoadModelandPredict(string FullFilePath, double threshold, ConcurrentQueue<string> mlTraining_status)
         {
-            LoadModel();
+            LoadModel(mlTraining_status);
             var Image = FileUtils.LoadInMemorySingleImageFromDirectory(FullFilePath);
             ImagePrediction prediction = predictionEngine.Predict(Image);
 
