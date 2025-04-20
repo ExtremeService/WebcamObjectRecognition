@@ -38,11 +38,14 @@ namespace WebcamObjectRecognition
             _mlContext = new MLContext();
 
             Messages.Enqueue("Startup");
-            Task.Run(() => ProcessCameraFeedAndUpdateOutputbox());            
+            Task.Run(() => ProcessCameraFeed());
+            Task.Run(() => UpdateOutputbox());
             CreateDirectories();
         }
 
-        private async void ProcessCameraFeedAndUpdateOutputbox()
+
+
+        private async void UpdateOutputbox()
         {
             while (_isRunning)
             {
@@ -54,7 +57,12 @@ namespace WebcamObjectRecognition
                         OutputBox.Text = status + Environment.NewLine + OutputBox.Text;
                     }
                 });
-
+            }
+            }
+        private async void ProcessCameraFeed()
+        {
+            while (_isRunning)
+            {
 
                 if (_capture == null) 
                 {
