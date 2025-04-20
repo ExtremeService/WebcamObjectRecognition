@@ -31,6 +31,7 @@ using Tensorflow.Train;
 using System.Collections.Concurrent;
 using IronPython.Runtime;
 using static System.Runtime.InteropServices.JavaScript.JSType;
+using Google.Protobuf;
 
 
 namespace WebcamObjectRecognition
@@ -52,29 +53,26 @@ namespace WebcamObjectRecognition
             _detectMode = false;
             _label = "";
             _mlContext = new MLContext();
-            Task.Run(() => ProcessCameraFeed());            
+
+            Messages.Enqueue("Startup");
+            Task.Run(() => ProcessCameraFeedAndUpdateOutputbox());            
             CreateDirectories();
         }
 
-        private async void UpdateOutput()
-        {
-            string status="";
-            while (string.IsNullOrEmpty (status) || !status.Contains("100%"))
-            {
-                TrainModel.IsEnabled = false;
-                if (Messages.TryDequeue(out status))
-                {
-                    OutputBox.Text = status + Environment.NewLine + OutputBox.Text;
-                }
-                await Task.Delay(100);
-            }
-            TrainModel.IsEnabled = true;
-        }
-
-        private async void ProcessCameraFeed()
+        private async void ProcessCameraFeedAndUpdateOutputbox()
         {
             while (_isRunning)
             {
+                // updating the OutputBox with the latest message
+                Dispatcher.Invoke(() =>
+                {
+                    if (Messages.TryDequeue(out string status))
+                    {
+                        OutputBox.Text = status + Environment.NewLine + OutputBox.Text;
+                    }
+                });
+
+
                 if (_capture == null) 
                 {
                     InitializeCamera();
@@ -88,12 +86,8 @@ namespace WebcamObjectRecognition
                 Dispatcher.Invoke(() =>
                 {
                     WebcamImage.Source = bitmap;
-
-                    if (_detectMode && _predictionEngine != null)
-                    {
-                        
-                    }
                 });
+
                 await Task.Delay(33); // ~30 FPS
             }
         }
@@ -133,18 +127,17 @@ namespace WebcamObjectRecognition
         {
             var tempLabel = LabelInput.Text.Trim();
             Task.Run(() => TakePictures(tempLabel, 10, 200, Messages));
-            UpdateOutput();
         }
 
         private void DetectButton_Click(object sender, RoutedEventArgs e)
         {
             if (!_detectMode)
             {
+
+                if (!IsModelReady(Messages)) return;
                 _detectMode = true;
                 DetectButton.Content = "Stop Detect Mode";
                 Task.Run(() => TakeSinglePicturesForPrediction(Messages));
-                UpdateOutput();
-
             }
             else
             {
@@ -192,9 +185,7 @@ namespace WebcamObjectRecognition
                 Messages = new ConcurrentQueue<string>();
             }
             Task.Run(() => CreateModel(Messages));
-            UpdateOutput();
         }
-
         private void Files_Click(object sender, RoutedEventArgs e)
         {
             string tempfolder = Path.Combine(imagesFolderPathForTraining, LabelInput.Text.Trim());
@@ -207,12 +198,14 @@ namespace WebcamObjectRecognition
 
         private void LabelInput_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (LabelInput.Text.Contains("-"))
+            {
+                LabelInput.Text = LabelInput.Text.Replace("-", "_");
+            }
             CaptureButton.IsEnabled = (LabelInput.Text.Length > 0);
             FileButton.IsEnabled = (LabelInput.Text.Length > 0);
         }
     }
-
-
 
     public static class OpenCvSharpExtensions
     {

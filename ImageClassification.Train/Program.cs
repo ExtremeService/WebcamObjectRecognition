@@ -20,7 +20,7 @@ namespace ImageClassification
         static string assetsPath = @"C:\Temp\MLTraining\assets";
         static string outputMlNetModelFilePath { get => Path.Combine(assetsPath, "outputs", outputMlNetModelFileName); set => throw new NotImplementedException(); }
 
-        public static string outputMlNetModelFileName { get; set; } = "imageClassifier.zip";
+        public static string outputMlNetModelFileName { get; set; } = "MLModel.zip";
         static string imagesFolderPathForPredictions { get; set; }  // store the test images, which are then predicted   
         public static string imagesFolderPathForTraining { get; set; } // store the training material
 
@@ -180,6 +180,7 @@ namespace ImageClassification
             {
                 return;
             }
+
             using (var stream = new FileStream(outputMlNetModelFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 trainedModel = mlContext.Model.Load(stream, out var modelInputSchema);
@@ -219,12 +220,25 @@ namespace ImageClassification
         }
 
 
-
+        public static bool IsModelReady(ConcurrentQueue<string> Messages)
+        {
+            if (!File.Exists(outputMlNetModelFilePath))
+            {
+                Messages.Enqueue($"Model not found at {outputMlNetModelFilePath}");
+                return false;
+            }
+            else
+            {
+                return true;
+            }
+        }
         public static async Task TakeSinglePicturesForPrediction(ConcurrentQueue<string> Messages)
         {
             DetectionRunning = true;
             while (true && DetectionRunning)
             {
+                Messages.Enqueue("----------------------------");
+                NewPicturesTaken.Clear();
                 await TakePictures("-", number: 1, sleepMs: 0, Messages);
                 LoadModelandPredict(NewPicturesTaken[0], 0.8, Messages);
                 await Task.Delay(2000);
@@ -238,7 +252,7 @@ namespace ImageClassification
                 InitializeCamera();
             }
             var labelDir = "";
-            if (labelname == "-")
+            if (labelname == "-") // label - is reserved for prediction 
             {
                 labelDir = Path.GetTempPath();
             }
@@ -275,52 +289,6 @@ namespace ImageClassification
             => FileUtils.LoadImagesFromDirectory(folder, useFolderNameAsLabel)
                 .Select(x => new ImageData(x.imagePath, x.label));
 
-        public static string DownloadImageSet(string imagesDownloadFolder)
-        {
-            // get a set of images to teach the network about the new classes
-
-            //SINGLE SMALL FLOWERS IMAGESET (200 files)
-            const string fileName = "flower_photos_small_set.zip";
-            var url = $"https://aka.ms/mlnet-resources/datasets/flower_photos_small_set.zip";
-            Web.Download(url, imagesDownloadFolder, fileName);
-            Compress.UnZip(Path.Join(imagesDownloadFolder, fileName), imagesDownloadFolder);
-
-            //SINGLE FULL FLOWERS IMAGESET (3,600 files)
-            //string fileName = "flower_photos.tgz";
-            //string url = $"http://download.tensorflow.org/example_images/{fileName}";
-            //Web.Download(url, imagesDownloadFolder, fileName);
-            //Compress.ExtractTGZ(Path.Join(imagesDownloadFolder, fileName), imagesDownloadFolder);
-
-            return Path.GetFileNameWithoutExtension(fileName);
-        }
-
-        public static string GetAbsolutePath(string relativePath)
-            => FileUtils.GetAbsolutePath(typeof(MLModel).Assembly, relativePath);
-
-        public static void ConsoleWriteImagePrediction(string ImagePath, string Label, string PredictedLabel, float Probability)
-        {
-            var defaultForeground = Console.ForegroundColor;
-            var labelColor = ConsoleColor.Magenta;
-            var probColor = ConsoleColor.Blue;
-
-            Console.Write("Image File: ");
-            Console.ForegroundColor = labelColor;
-            Console.Write($"{Path.GetFileName(ImagePath)}");
-            Console.ForegroundColor = defaultForeground;
-            Console.Write(" original labeled as ");
-            Console.ForegroundColor = labelColor;
-            Console.Write(Label);
-            Console.ForegroundColor = defaultForeground;
-            Console.Write(" predicted as ");
-            Console.ForegroundColor = labelColor;
-            Console.Write(PredictedLabel);
-            Console.ForegroundColor = defaultForeground;
-            Console.Write(" with score ");
-            Console.ForegroundColor = probColor;
-            Console.Write(Probability);
-            Console.ForegroundColor = defaultForeground;
-            Console.WriteLine("");
-        }
 
         private static void FilterMLContextLog(object sender, LoggingEventArgs e)
         {

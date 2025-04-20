@@ -11,20 +11,6 @@ namespace CLIDemo
             MLModel.outputMlNetModelFileName = "MLModel.zip";
 
 
-            //var singleMarco = "";//TakeSinglePicturesForPrediction("Marco");
-            LoadModelandPredict("C:\\Temp\\MLTraining\\assets\\inputs\\images\\marco\\638801515384410111.jpg");
-
-
-
-
-            TakePictures("marco",100);
-            CreateModel();
-
-
-
-            var singleMarco = TakeSinglePicturesForPrediction("Marco");
-            LoadModelandPredict(singleMarco[0]);
-
 
         }
     }

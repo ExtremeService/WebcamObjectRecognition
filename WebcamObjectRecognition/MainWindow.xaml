@@ -16,7 +16,7 @@
         </StackPanel>
 
         <!-- Webcam Feed -->
-        <Image x:Name="WebcamImage" Grid.Row="1" Stretch="Uniform" Margin="29,14,355,175"/>
+        <Image x:Name="WebcamImage" Grid.Row="1" Stretch="Uniform" Margin="29,14,355,175" IsEnabled="False"/>
 
         <!-- Buttons -->
         <TabControl Grid.Row="1" Margin="0,432,0,0">
