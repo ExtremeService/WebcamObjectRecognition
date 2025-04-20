@@ -1,6 +1,4 @@
 ﻿using ICSharpCode.SharpZipLib.GZip;
-using Ionic.BZip2;
-using IronPython.Zlib;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.Vision;
@@ -25,11 +23,9 @@ using ImageClassification;
 using ImageClassification.DataModels;
 using System.Windows.Media;
 using System.Windows.Controls;
-using static Community.CsharpSqlite.Sqlite3;
 using Tensorflow.Contexts;
 using Tensorflow.Train;
 using System.Collections.Concurrent;
-using IronPython.Runtime;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using Google.Protobuf;
 

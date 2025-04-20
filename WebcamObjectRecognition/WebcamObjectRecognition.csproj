@@ -6,7 +6,6 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="IronPython" Version="3.4.2" />
     <PackageReference Include="Microsoft.ML" Version="5.0.0-preview.1.25127.4" />
     <PackageReference Include="Microsoft.ML.ImageAnalytics" Version="5.0.0-preview.1.25127.4" />
     <PackageReference Include="Microsoft.ML.Vision" Version="5.0.0-preview.1.25127.4" />
