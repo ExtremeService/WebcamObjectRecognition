@@ -147,12 +147,17 @@ namespace WebcamObjectRecognition
 
         private void StopButton_Click(object sender, RoutedEventArgs e)
         {
+            StopAndClose();
+        }
+
+
+        private void StopAndClose()
+        {
             _isRunning = false;
             _capture?.Release();
             _predictionEngine?.Dispose();
             Close();
         }
-
 
         private void ResetToIdle()
         {
@@ -170,7 +175,6 @@ namespace WebcamObjectRecognition
 
         private void Train_Click(object sender, RoutedEventArgs e)
         {
-            MLModel.outputMlNetModelFileName = "MLModel.zip";
             if (Messages == null)
             {
                 Messages = new ConcurrentQueue<string>();
@@ -195,6 +199,11 @@ namespace WebcamObjectRecognition
             }
             CaptureButton.IsEnabled = (LabelInput.Text.Length > 0);
             FileButton.IsEnabled = (LabelInput.Text.Length > 0);
+        }
+
+        private void Window_Closed(object sender, EventArgs e)
+        {
+            StopAndClose();
         }
     }
 

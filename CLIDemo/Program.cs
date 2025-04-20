@@ -8,7 +8,6 @@ namespace CLIDemo
         static void Main(string[] args)
         {
             CreateDirectories();
-            MLModel.outputMlNetModelFileName = "MLModel.zip";
 
 
 
