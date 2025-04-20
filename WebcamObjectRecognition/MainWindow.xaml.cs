@@ -1,33 +1,20 @@
 ﻿using ICSharpCode.SharpZipLib.GZip;
 using Microsoft.ML;
-using Microsoft.ML.Data;
-using Microsoft.ML.Vision;
 using OpenCvSharp;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Net;
-using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using static Microsoft.ML.Transforms.ValueToKeyMappingEstimator;
 using ICSharpCode.SharpZipLib.Core;
-using ICSharpCode.SharpZipLib.Tar;
 using static ImageClassification.MLModel;
 using ImageClassification;
 using ImageClassification.DataModels;
 using System.Windows.Media;
 using System.Windows.Controls;
-using Tensorflow.Contexts;
-using Tensorflow.Train;
 using System.Collections.Concurrent;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using Google.Protobuf;
 
 
 namespace WebcamObjectRecognition
