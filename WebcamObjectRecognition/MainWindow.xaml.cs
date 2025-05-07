@@ -22,6 +22,7 @@ namespace WebcamObjectRecognition
     public partial class MainWindow : System.Windows.Window
     {
         private bool _isRunning;
+        public object _cameralock = new();
         private bool _trainMode;
         private bool _detectMode;
         private string _label;
@@ -68,17 +69,18 @@ namespace WebcamObjectRecognition
                 {
                     InitializeCamera();
                 }
-                using var frame = _capture.RetrieveMat();
-                if (frame.Empty())
-                    continue;
-
-                var bitmap = frame.ToBitmapSource();
-                bitmap.Freeze();
-                Dispatcher.Invoke(() =>
+                lock (_cameralock)
                 {
-                    WebcamImage.Source = bitmap;
-                });
-
+                    using var frame = _capture.RetrieveMat();
+                    if (frame.Empty())
+                        continue;
+                    var bitmap = frame.ToBitmapSource();
+                    bitmap.Freeze();
+                    Dispatcher.Invoke(() =>
+                    {
+                        WebcamImage.Source = bitmap;
+                    });
+                }
                 await Task.Delay(33); // ~30 FPS
             }
         }
@@ -117,7 +119,7 @@ namespace WebcamObjectRecognition
         private void CaptureButton_Click(object sender, RoutedEventArgs e)
         {
             var tempLabel = LabelInput.Text.Trim();
-            Task.Run(() => TakePictures(tempLabel, 10, 200, Messages));
+            Task.Run(() => TakePictures(tempLabel, 100, 200, Messages, _cameralock));
         }
 
         private void DetectButton_Click(object sender, RoutedEventArgs e)
@@ -128,7 +130,7 @@ namespace WebcamObjectRecognition
                 if (!IsModelReady(Messages)) return;
                 _detectMode = true;
                 DetectButton.Content = "Stop Detect Mode";
-                Task.Run(() => TakeSinglePicturesForPrediction(Messages));
+                Task.Run(() => TakeSinglePicturesForPrediction(Messages, _cameralock));
             }
             else
             {

@@ -35,7 +35,6 @@ namespace ImageClassification
 
         static ITransformer trainedModel = null;
         public  static VideoCapture _capture;
-
         public static void CreateDirectories()
         {
             Directory.CreateDirectory(assetsPath);
@@ -79,35 +78,35 @@ namespace ImageClassification
             IDataView testDataView = trainTestData.TestSet;
 
             // 5. Define the model's training pipeline using DNN default values
-            //
-            //var pipeline = mlContext.MulticlassClassification.Trainers
-            //        .ImageClassification(featureColumnName: "Image",
-            //                             labelColumnName: "LabelAsKey",
-            //                             validationSet: testDataView)
-            //    .Append(mlContext.Transforms.Conversion.MapKeyToValue(outputColumnName: "PredictedLabel",
-            //                                                          inputColumnName: "PredictedLabel"));
+
+            var pipeline = mlContext.MulticlassClassification.Trainers
+                    .ImageClassification(featureColumnName: "Image",
+                                         labelColumnName: "LabelAsKey",
+                                         validationSet: testDataView)
+                .Append(mlContext.Transforms.Conversion.MapKeyToValue(outputColumnName: "PredictedLabel",
+                                                                      inputColumnName: "PredictedLabel"));
 
             //5.1(OPTIONAL) Define the model's training pipeline by using explicit hyper-parameters
 
 
-            var options = new ImageClassificationTrainer.Options()
-            {
-                FeatureColumnName = "Image",
-                LabelColumnName = "LabelAsKey",
-                // Just by changing/selecting InceptionV3/MobilenetV2/ResnetV250  
-                // you can try a different DNN architecture (TensorFlow pre-trained model). 
-                Arch = ImageClassificationTrainer.Architecture.InceptionV3,
-                Epoch = 50,       //100
-                BatchSize = 10,
-                LearningRate = 0.01f,
-                MetricsCallback = (metrics) => Console.WriteLine(metrics),
-                ValidationSet = testDataView
-            };
+            //var options = new ImageClassificationTrainer.Options()
+            //{
+            //    FeatureColumnName = "Image",
+            //    LabelColumnName = "LabelAsKey",
+            //    // Just by changing/selecting InceptionV3/MobilenetV2/ResnetV250  
+            //    // you can try a different DNN architecture (TensorFlow pre-trained model). 
+            //    Arch = ImageClassificationTrainer.Architecture.InceptionV3,
+            //    Epoch = 50,       //100
+            //    BatchSize = 10,
+            //    LearningRate = 0.01f,
+            //    MetricsCallback = (metrics) => Console.WriteLine(metrics),
+            //    ValidationSet = testDataView
+            //};
 
-            var pipeline = mlContext.MulticlassClassification.Trainers.ImageClassification(options)
-                    .Append(mlContext.Transforms.Conversion.MapKeyToValue(
-                        outputColumnName: "PredictedLabel",
-                        inputColumnName: "PredictedLabel"));
+            //var pipeline = mlContext.MulticlassClassification.Trainers.ImageClassification(options)
+            //    .Append(mlContext.Transforms.Conversion.MapKeyToValue(
+            //            outputColumnName: "PredictedLabel",
+            //            inputColumnName: "PredictedLabel"));
 
             // 6. Train/create the ML model
             Console.WriteLine("*** Training the image classification model with DNN Transfer Learning on top of the selected pre-trained model/architecture ***");
@@ -198,15 +197,8 @@ namespace ImageClassification
             ImagePrediction prediction = predictionEngine.Predict(Image);
 
             bool predicitonConfidenceFull = prediction.Score.Max() > threshold;
-            string response = predicitonConfidenceFull ? "High confidence" : "Low confidence prediction, please check the image.";
 
-            Console.WriteLine($"Image Filename : [{Image.ImageFileName}], " +
-                    $"Scores : [{string.Join(";", prediction.Score)}], " +
-                    $"Predicted Label : {prediction.PredictedLabel}  {response}");
-
-            mlTraining_status.Enqueue($"Image Filename : [{Image.ImageFileName}], " +
-                    $"Scores : [{string.Join(";", prediction.Score)}], " +
-                    $"Predicted Label : {prediction.PredictedLabel}  {response}");
+            mlTraining_status.Enqueue($"Predicted Label : {prediction.PredictedLabel} with score: {prediction.Score.Max():F2} ");
             return prediction;
         }
 
@@ -234,20 +226,20 @@ namespace ImageClassification
                 return true;
             }
         }
-        public static async Task TakeSinglePicturesForPrediction(ConcurrentQueue<string> Messages)
+        public static async Task TakeSinglePicturesForPrediction(ConcurrentQueue<string> Messages, object _cameralock)
         {
             DetectionRunning = true;
             while (true && DetectionRunning)
             {
                 Messages.Enqueue("----------------------------");
                 NewPicturesTaken.Clear();
-                await TakePictures("-", number: 1, sleepMs: 0, Messages);
+                await TakePictures("-", number: 1, sleepMs: 0, Messages, _cameralock);
                 LoadModelandPredict(NewPicturesTaken[0], 0.8, Messages);
                 await Task.Delay(2000);
             }
         }
 
-        public static async Task TakePictures(string labelname, int number, int sleepMs, ConcurrentQueue<string> Messages)
+        public static async Task TakePictures(string labelname, int number, int sleepMs, ConcurrentQueue<string> Messages, object _cameralock)
         {
             if (_capture == null)
             {
@@ -266,13 +258,16 @@ namespace ImageClassification
 
             for (int i = 0; i< number; i++)
             {
-                var frame = _capture.RetrieveMat();
-                var timestamp = DateTime.Now.Ticks;
-                var imgPath = Path.Combine(labelDir, $"{timestamp}.jpg");
-                frame.ImWrite(imgPath);
-                NewPicturesTaken.Add(imgPath);
-                if(number!=1)  await Task.Delay(sleepMs);
-                Messages.Enqueue($"Pcitures {i} of total {number} taken");
+                lock (_cameralock)
+                {
+                    var frame = _capture.RetrieveMat();
+                    var timestamp = DateTime.Now.Ticks;
+                    var imgPath = Path.Combine(labelDir, $"{timestamp}.jpg");
+                    frame.ImWrite(imgPath);
+                    NewPicturesTaken.Add(imgPath);
+                }
+                    if (number != 1) await Task.Delay(sleepMs);
+                    Messages.Enqueue($"Pcitures {i} of total {number} taken");
             }
             if (labelname != "-")
             {

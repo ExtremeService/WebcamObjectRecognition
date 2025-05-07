@@ -25,17 +25,17 @@
                     <TextBlock Text=" Label:"     FontSize="16"         Margin="83,47,697,33" IsEnabled="False" />
                     <TextBox x:Name="LabelInput" FontSize="16"          Margin="164,28,525,33" TextChanged="LabelInput_TextChanged" Height="50" Width="150"/>
                     <Button x:Name="CaptureButton" Content="Capture"    Margin="351,28,339,33" Click="CaptureButton_Click" IsEnabled="False" Height="50" />
-                     <Button x:Name="FileButton" Content="ShowFiles"     Margin="536,28,154,33" Click="Files_Click" IsEnabled="False" Height="50"/>
-                    </Grid>
+                    <Button x:Name="FileButton" Content="ShowFiles"     Margin="536,28,154,33" Click="Files_Click" IsEnabled="False" Height="50"/>
+                </Grid>
             </TabItem>
             <TabItem Header="Train" Height="20" VerticalAlignment="Top">
                 <Grid Background="#FFE5E5E5">
-                    <Button x:Name="TrainModel" Content="Train Model" Width="150" Margin="289,19,352,29" Click="Train_Click" Grid.Column="2" Height="50"/>
+                    <Button x:Name="TrainModel" Content="Train Model" Width="150" Margin="315,19,375,49" Click="Train_Click" Height="50"/>
                 </Grid>
             </TabItem>
             <TabItem Header="Detection">
                 <Grid Background="#FFE5E5E5">
-                    <Button x:Name="DetectButton" Content="Start Detect Mode" Margin="307,34,383,34" Click="DetectButton_Click" Width="150" Height="50"/>
+                    <Button x:Name="DetectButton" Content="Start Detect Mode" Margin="311,20,379,48" Click="DetectButton_Click" Width="150" Height="50"/>
                 </Grid>
             </TabItem>
             <TabItem Header="Stop">
@@ -48,7 +48,7 @@
                 </Grid>
             </TabItem>
         </TabControl>
-        
+
         <TextBox x:Name="OutputBox" HorizontalAlignment="Left" Margin="521,19,0,0" Grid.Row="1" TextWrapping="Wrap" VerticalAlignment="Top" Width="305" Height="413" IsEnabled="False"/>
 
     </Grid>
