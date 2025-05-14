@@ -21,8 +21,8 @@ Uses ML.NET with OpenCV. Model selection InceptionV3, feel free to change to Inc
 
 All data is stored under the hardcoded path: C:\Temp\MLTraining\assets
 
-Sources: 
-GROK https://x.com/i/grok
+Sources:
+https://x.com/i/grok
 https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/iris-clustering
 https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/image-classification-api-transfer-learning
 https://github.com/dotnet/machinelearning-samples/
