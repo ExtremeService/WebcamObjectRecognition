@@ -1,3 +1,8 @@
+## License
+This project is licensed under the Apache License 2.0
+
+
+
 This WFP Application allows it to capture labeled pictures with an UVC-compliant Camera (Mode: Capture), then train a model (Mode: Train).
 Change to Detection mode  (Mode: Detection) and the SW predicts the label for wathever is captured by the camera.
 
