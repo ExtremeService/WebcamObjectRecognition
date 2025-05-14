@@ -30,12 +30,12 @@
             </TabItem>
             <TabItem Header="Train" Height="20" VerticalAlignment="Top">
                 <Grid Background="#FFE5E5E5">
-                    <Button x:Name="TrainModel" Content="Train Model" Width="150" Margin="315,19,375,49" Click="Train_Click" Height="50"/>
+                    <Button x:Name="TrainModel" Content="Train Model" Width="150"  Click="Train_Click" Height="50"/>
                 </Grid>
             </TabItem>
             <TabItem Header="Detection">
                 <Grid Background="#FFE5E5E5">
-                    <Button x:Name="DetectButton" Content="Start Detect Mode" Margin="311,20,379,48" Click="DetectButton_Click" Width="150" Height="50"/>
+                    <Button x:Name="DetectButton" Content="Start Detect Mode" Click="DetectButton_Click" Width="150" Height="50"/>
                 </Grid>
             </TabItem>
             <TabItem Header="Stop">
@@ -44,7 +44,7 @@
                         <ColumnDefinition Width="25*"/>
                         <ColumnDefinition Width="769*"/>
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="StopButton" Content="Stop" Width="150" Margin="307,19,362,29" Click="StopButton_Click" Grid.Column="1" Height="50"/>
+                    <Button x:Name="StopButton" Content="Stop" Width="150" Click="StopButton_Click" Grid.Column="1" Height="50"/>
                 </Grid>
             </TabItem>
         </TabControl>
