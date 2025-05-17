@@ -13,6 +13,7 @@ using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using Google.Protobuf;
 using Microsoft.ML.Vision;
+using System.Windows;
 
 namespace ImageClassification
 {
@@ -20,11 +21,12 @@ namespace ImageClassification
     {
 
         //https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/iris-clustering
-
         //https://learn.microsoft.com/en-us/dotnet/machine-learning/tutorials/image-classification-api-transfer-learning
         //https://github.com/dotnet/machinelearning-samples/
 
         static string assetsPath = @"C:\Temp\MLTraining\assets";
+
+        static string InputImageReference { get => Path.Combine(assetsPath, "inputs", "reference.jpg"); set => throw new NotImplementedException(); }
         static string outputMlNetModelFilePath { get => Path.Combine(assetsPath, "outputs", outputMlNetModelFileName); set => throw new NotImplementedException(); }
 
         public static string outputMlNetModelFileName { get; set; } = "MLModel.zip";
@@ -50,6 +52,66 @@ namespace ImageClassification
             Directory.CreateDirectory(imagesFolderPathForPredictions);
             Directory.CreateDirectory(imagesFolderPathForTraining);
 
+        }
+
+
+        public static bool NormalizeToReferenceImage(string imagePath, ConcurrentQueue<string> mlTraining_status)
+        {
+            bool result = false;
+            if (!File.Exists(InputImageReference) )
+            {
+                mlTraining_status.Enqueue($"Reference Picture for orientation not found, please create under path: {InputImageReference} ");
+                return result;
+            }
+            var referenceImage = Cv2.ImRead(InputImageReference, ImreadModes.Grayscale);
+            var inputImage = Cv2.ImRead(imagePath, ImreadModes.Grayscale);
+            var coloredInputImage = Cv2.ImRead(imagePath, ImreadModes.Color); // For final warping
+
+            // Step 1: Detect keypoints and descriptors using ORB
+            var orb = ORB.Create(nFeatures: 1000);
+            KeyPoint[] refKeypoints, inputKeypoints;
+            var refDescriptors = new Mat();
+            var inputDescriptors = new Mat();
+            orb.DetectAndCompute(referenceImage, null, out refKeypoints, refDescriptors);
+            orb.DetectAndCompute(inputImage, null, out inputKeypoints, inputDescriptors);
+
+            // Step 2: Match descriptors using BFMatcher
+            var matcher = new BFMatcher(NormTypes.Hamming, crossCheck: true);
+            var matches = matcher.Match(refDescriptors, inputDescriptors);
+
+            // Step 3: Filter good matches (optional: apply ratio test)
+            matches = matches.OrderBy(x => x.Distance).Take(100).ToArray(); // Take top 100 matches
+
+            // Step 4: Extract matched keypoints
+            var refPoints = new Point2f[matches.Length];
+            var inputPoints = new Point2f[matches.Length];
+            for (int i = 0; i < matches.Length; i++)
+            {
+                refPoints[i] = refKeypoints[matches[i].QueryIdx].Pt;
+                inputPoints[i] = inputKeypoints[matches[i].TrainIdx].Pt;
+            }
+
+            // Convert Point2f[] to Mat
+            var inputPointsMat = Mat.FromArray(inputPoints); // Create Mat from inputPoints
+            var refPointsMat = Mat.FromArray(refPoints);     // Create Mat from refPoints
+
+            // Step 5: Estimate affine transformation
+            var transform = Cv2.EstimateAffine2D(inputPointsMat, refPointsMat, null, RobustEstimationAlgorithms.RANSAC);
+
+            if (transform == null)
+            {
+                Console.WriteLine("Could not compute affine transformation.");
+                return result;
+            }
+
+            // Step 6: Warp the input image to align with the reference
+            var warpedImage = new Mat();
+            Cv2.WarpAffine(coloredInputImage, warpedImage, transform, referenceImage.Size());
+
+            // Save or display the result
+            Cv2.ImWrite(imagePath, warpedImage);
+            result = true;
+            return result;
         }
 
 
@@ -213,11 +275,78 @@ namespace ImageClassification
 
         public  static void InitializeCamera()
         {
+            int frameWidth = 1280;
+            int frameHeight = 720;
             _capture = new VideoCapture(0);
+            if (!_capture.Set(VideoCaptureProperties.FrameWidth, frameWidth))
+            {
+               
+            }
+            if (!_capture.Set(VideoCaptureProperties.FrameHeight, frameHeight))
+            {
+                
+            }
             if (!_capture.IsOpened())
             {
                 throw new Exception("Camera not found");
             }
+        }
+
+
+        public static void FaceDetection()
+        {
+            string cascadePath = "Resources/haarcascade_frontalface_default.xml";
+            string imagePath = "input.jpg"; // Replace with your image path
+            string outputDir = "OutputFaces";
+
+            // Create output directory if it doesn't exist
+            Directory.CreateDirectory(outputDir);
+
+            // Load Haar Cascade for face detection
+            var faceCascade = new CascadeClassifier(cascadePath);
+
+            // Load the image
+            var image = Cv2.ImRead(imagePath);
+            if (image.Empty())
+            {
+                Console.WriteLine("Failed to load image.");
+                return;
+            }
+
+            // Convert to grayscale for detection
+            using var gray = new Mat();
+            Cv2.CvtColor(image, gray, ColorConversionCodes.BGR2GRAY);
+
+            // Detect faces
+            var faces = faceCascade.DetectMultiScale(
+                image: gray,
+                scaleFactor: 1.1,
+                minNeighbors: 5,
+                minSize: new Size(30, 30)
+            );
+
+            Console.WriteLine($"Detected {faces.Length} face(s).");
+
+            // Extract and save each face
+            for (int i = 0; i < faces.Length; i++)
+            {
+                var face = faces[i];
+                // Crop the face region from the original image
+                using var faceImage = new Mat(image, face);
+
+                // Save the cropped face
+                string outputPath = Path.Combine(outputDir, $"face_{i + 1}.jpg");
+                faceImage.SaveImage(outputPath);
+                Console.WriteLine($"Saved face {i + 1} to {outputPath}");
+
+                // Optionally, draw rectangle around face on original image
+                Cv2.Rectangle(image, face, Scalar.Red, 2);
+            }
+
+            // Save the image with detected faces (optional)
+            string outputImagePath = Path.Combine(outputDir, "image_with_faces.jpg");
+            image.SaveImage(outputImagePath);
+            Console.WriteLine($"Saved image with detected faces to {outputImagePath}");
         }
 
 
@@ -267,14 +396,22 @@ namespace ImageClassification
             {
                 lock (_cameralock)
                 {
+                    _capture.Grab();
                     var frame = _capture.RetrieveMat();
                     var timestamp = DateTime.Now.Ticks;
                     var imgPath = Path.Combine(labelDir, $"{timestamp}.jpg");
                     frame.ImWrite(imgPath);
+                    if (!NormalizeToReferenceImage(imgPath, Messages))
+                    {
+                        return;
+                    }
                     NewPicturesTaken.Add(imgPath);
                 }
-                    if (number != 1) await Task.Delay(sleepMs);
+                if (number != 1)
+                {
+                    await Task.Delay(sleepMs);
                     Messages.Enqueue($"Pcitures {i} of total {number} taken");
+                }
             }
             if (labelname != "-")
             {
