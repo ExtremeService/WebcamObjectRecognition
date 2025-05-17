@@ -29,6 +29,8 @@ namespace WebcamObjectRecognition
         private MLContext _mlContext;
         private PredictionEngine<ImageData, ImagePrediction> _predictionEngine;
         static ConcurrentQueue<string> Messages = new ConcurrentQueue<string>();
+        private bool? useFaceDetection = false;
+        private bool? useReferenceImage = false;
         public MainWindow()
         {
             InitializeComponent();
@@ -84,37 +86,6 @@ namespace WebcamObjectRecognition
                 await Task.Delay(33); // ~30 FPS
             }
         }
-        private void TrainButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (!_trainMode)
-            {
-                if (string.IsNullOrWhiteSpace(LabelInput.Text))
-                {
-                    LabelInput.BorderBrush = new SolidColorBrush(Colors.Red);
-                    return;
-                }
-                LabelInput.BorderBrush = new SolidColorBrush(Colors.Black);
-                LabelInput.Background = System.Windows.Media.Brushes.Green;
-                _label = LabelInput.Text.Trim();
-                _trainMode = true;
-                _detectMode = false;
-                StatusText.Text = $"Train Mode: {_label}";
-                StatusText.Foreground = System.Windows.Media.Brushes.Green;
-                LabelInput.IsEnabled = false;
-                CaptureButton.IsEnabled = true;
-
-                DetectButton.IsEnabled = false;                
-            }
-            else
-            {
-                _trainMode = false;
-                StatusText.Text = "Idle";
-                StatusText.Foreground = System.Windows.Media.Brushes.Green;
-                LabelInput.IsEnabled = true;
-                CaptureButton.IsEnabled = false;
-                DetectButton.IsEnabled = true;
-            }
-        }
 
         private void CaptureButton_Click(object sender, RoutedEventArgs e)
         {
@@ -135,8 +106,6 @@ namespace WebcamObjectRecognition
             else
             {
                 _detectMode = false;
-                StatusText.Text = "Idle";
-                StatusText.Foreground = System.Windows.Media.Brushes.Green;
                 LabelInput.IsEnabled = true;
                 CaptureButton.IsEnabled = false;
                 DetectButton.Content = "Start Detect Mode";
@@ -159,20 +128,6 @@ namespace WebcamObjectRecognition
             _capture?.Release();
             _predictionEngine?.Dispose();
             Close();
-        }
-
-        private void ResetToIdle()
-        {
-            _detectMode = false;
-            _trainMode = false;
-            StatusText.Text = "Idle";
-            StatusText.Foreground = System.Windows.Media.Brushes.Green;
-            LabelInput.IsEnabled = true;
-            CaptureButton.IsEnabled = false;
-            DetectButton.Content = "Start Detect Mode";
-            DetectButton.IsEnabled = true;
-            _predictionEngine?.Dispose();
-            _predictionEngine = null;
         }
 
         private void Train_Click(object sender, RoutedEventArgs e)
@@ -210,7 +165,22 @@ namespace WebcamObjectRecognition
 
         private void RadioButton_Checked(object sender, RoutedEventArgs e)
         {
+            useFaceDetection = true;
+        }
 
+        private void RefimageCheckbox_Checked(object sender, RoutedEventArgs e)
+        {
+            useReferenceImage = true;
+        }
+
+        private void RefimageCheckbox_UnChecked(object sender, RoutedEventArgs e)
+        {
+            useReferenceImage = false;
+        }
+
+        private void FaceDetectionCheckbox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            useFaceDetection = false;
         }
     }
 
