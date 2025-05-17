@@ -207,6 +207,11 @@ namespace WebcamObjectRecognition
         {
             StopAndClose();
         }
+
+        private void RadioButton_Checked(object sender, RoutedEventArgs e)
+        {
+
+        }
     }
 
     public static class OpenCvSharpExtensions

@@ -314,7 +314,7 @@ namespace ImageClassification
             }
 
             // Convert to grayscale for detection
-            using var gray = new Mat();
+            var gray = new Mat();
             Cv2.CvtColor(image, gray, ColorConversionCodes.BGR2GRAY);
 
             // Detect faces
@@ -332,7 +332,7 @@ namespace ImageClassification
             {
                 var face = faces[i];
                 // Crop the face region from the original image
-                using var faceImage = new Mat(image, face);
+                var faceImage = new Mat(image, face);
 
                 // Save the cropped face
                 string outputPath = Path.Combine(outputDir, $"face_{i + 1}.jpg");
